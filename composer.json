@@ -1,13 +1,8 @@
 {
-    "name": "{{slug}}",
-    "description": "{{plugin-name}} - A WordPress app powered by WpApp",
+    "name": "akirk/create-wp-app",
+    "description": "A WordPress app powered by WpApp",
     "type": "wordpress-plugin",
     "license": "GPL-2.0-or-later",
-    "authors": [
-        {
-            "name": "{{author}}"
-        }
-    ],
     "require": {
         "php": ">=7.4",
         "akirk/wp-app": "^1.0"

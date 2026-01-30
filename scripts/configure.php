@@ -2,10 +2,29 @@
 /**
  * Post-create-project configuration script.
  * Prompts for project details and customizes the scaffolded files.
+ *
+ * Supports non-interactive mode via environment variables:
+ *   WP_APP_PLUGIN_NAME  - Plugin name (default: derived from slug)
+ *   WP_APP_NAMESPACE    - PHP namespace (default: derived from plugin name)
+ *   WP_APP_AUTHOR       - Plugin author
+ *   WP_APP_URL_PATH     - URL path for the app (default: slug)
+ *   WP_APP_SETUP_TYPE   - "1" for minimal, "2" for full (default: 1)
  */
 
-// Helper function to prompt for input
-function prompt( string $question, ?string $default = null ): string {
+$is_interactive = getenv( 'COMPOSER_NO_INTERACTION' ) !== '1'
+    && stream_isatty( STDIN );
+
+// Helper function to get value from env or prompt
+function get_value( string $env_key, string $question, ?string $default, bool $interactive ): string {
+    $env_value = getenv( $env_key );
+    if ( $env_value !== false && $env_value !== '' ) {
+        return $env_value;
+    }
+
+    if ( ! $interactive ) {
+        return $default ?? '';
+    }
+
     $default_text = $default !== null ? " [$default]" : '';
     echo "$question$default_text: ";
     $answer = trim( fgets( STDIN ) );
@@ -29,17 +48,25 @@ echo "\n";
 echo "Creating WpApp plugin: $slug\n";
 echo str_repeat( '-', 40 ) . "\n\n";
 
-// Prompt for configuration
-$plugin_name = prompt( 'Plugin name', slug_to_title( $slug ) );
-$namespace   = prompt( 'Namespace', to_namespace( $plugin_name ) );
-$author      = prompt( 'Author', '' );
-$url_path    = prompt( 'URL path', $slug );
+// Get configuration values
+$plugin_name = get_value( 'WP_APP_PLUGIN_NAME', 'Plugin name', slug_to_title( $slug ), $is_interactive );
+$namespace   = get_value( 'WP_APP_NAMESPACE', 'Namespace', to_namespace( $plugin_name ), $is_interactive );
+$author      = get_value( 'WP_APP_AUTHOR', 'Author', '', $is_interactive );
+$url_path    = get_value( 'WP_APP_URL_PATH', 'URL path', $slug, $is_interactive );
 
-echo "\n";
-echo "Setup type:\n";
-echo "  [1] Minimal - simple WpApp setup\n";
-echo "  [2] Full - with BaseApp structure\n";
-$setup_type = prompt( 'Choose', '1' );
+// Setup type selection
+$setup_type_env = getenv( 'WP_APP_SETUP_TYPE' );
+if ( $setup_type_env !== false && in_array( $setup_type_env, [ '1', '2' ], true ) ) {
+    $setup_type = $setup_type_env;
+} elseif ( $is_interactive ) {
+    echo "\n";
+    echo "Setup type:\n";
+    echo "  [1] Minimal - simple WpApp setup\n";
+    echo "  [2] Full - with BaseApp structure\n";
+    $setup_type = get_value( '', 'Choose', '1', true );
+} else {
+    $setup_type = '1';
+}
 
 $is_full_setup = $setup_type === '2';
 
@@ -73,8 +100,21 @@ add_action( 'init', function() {
 } );
 PHP;
 
-// Define the full setup code
+// Define the full setup code with PSR-4 autoloader for plugin classes
 $full_setup_code = <<<'PHP'
+// Autoloader for plugin classes.
+spl_autoload_register( function( $class ) {
+    $prefix = '{{namespace}}\\';
+    $len = strlen( $prefix );
+    if ( strncmp( $prefix, $class, $len ) !== 0 ) {
+        return;
+    }
+    $file = __DIR__ . '/src/' . str_replace( '\\', '/', substr( $class, $len ) ) . '.php';
+    if ( file_exists( $file ) ) {
+        require $file;
+    }
+} );
+
 add_action( 'init', function() {
     $app = new App();
     $app->init();
@@ -98,18 +138,22 @@ if ( $is_full_setup ) {
     $replacements['{{full-setup}}']    = '';
 }
 
-// Apply replacements to placeholder values themselves (e.g., url-path in minimal code)
+// Apply replacements to placeholder values themselves (e.g., namespace in setup code)
 $replacements['{{minimal-setup}}'] = str_replace(
     array_keys( $replacements ),
     array_values( $replacements ),
     $replacements['{{minimal-setup}}']
 );
+$replacements['{{full-setup}}'] = str_replace(
+    array_keys( $replacements ),
+    array_values( $replacements ),
+    $replacements['{{full-setup}}']
+);
 
-// Files to process
+// Files to process (composer.json handled separately)
 $files_to_process = [
     'plugin-name.php',
     'templates/index.php',
-    'composer.json',
 ];
 
 if ( $is_full_setup ) {
@@ -135,6 +179,12 @@ if ( file_exists( 'plugin-name.php' ) && ! file_exists( $new_plugin_file ) ) {
     echo "✓ Renamed plugin-name.php to $new_plugin_file\n";
 }
 
+// Rename gitignore to .gitignore
+if ( file_exists( 'gitignore' ) && ! file_exists( '.gitignore' ) ) {
+    rename( 'gitignore', '.gitignore' );
+    echo "✓ Created .gitignore\n";
+}
+
 // Remove src directory if minimal setup
 if ( ! $is_full_setup && is_dir( 'src' ) ) {
     array_map( 'unlink', glob( 'src/*' ) );
@@ -142,16 +192,23 @@ if ( ! $is_full_setup && is_dir( 'src' ) ) {
     echo "✓ Removed src/ directory (not needed for minimal setup)\n";
 }
 
-// Clean up composer.json: remove scripts section, empty authors, and autoload if no src
+// Update composer.json with project details
 $composer_json = json_decode( file_get_contents( 'composer.json' ), true );
+$composer_json['name'] = $slug;
+$composer_json['description'] = "$plugin_name - A WordPress app powered by WpApp";
 unset( $composer_json['scripts'] );
-if ( empty( $composer_json['authors'][0]['name'] ) ) {
+if ( ! empty( $author ) ) {
+    $composer_json['authors'] = [ [ 'name' => $author ] ];
+} else {
     unset( $composer_json['authors'] );
 }
-if ( ! $is_full_setup ) {
+if ( $is_full_setup ) {
+    $composer_json['autoload']['psr-4'] = [ "$namespace\\" => 'src/' ];
+} else {
     unset( $composer_json['autoload'] );
 }
 file_put_contents( 'composer.json', json_encode( $composer_json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) . "\n" );
+echo "✓ Updated composer.json\n";
 
 // Clean up: remove scripts directory
 array_map( 'unlink', glob( 'scripts/*' ) );
