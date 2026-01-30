@@ -16,6 +16,10 @@ This will prompt you for:
 - **URL path** — Where your app lives (e.g., `/my-plugin/`)
 - **Setup type** — Minimal or Full (with BaseApp structure)
 
+## Screenshot
+
+<img width="788" height="681" alt="create-wp-app" src="https://github.com/user-attachments/assets/f0180015-96e9-4ae1-af64-1cec0bae9de1" />
+
 ## Setup Types
 
 ### Minimal
