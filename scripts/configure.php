@@ -223,12 +223,17 @@ echo "\n";
 $in_plugins_dir = strpos( getcwd(), 'wp-content/plugins' ) !== false;
 
 echo "Next steps:\n";
+echo "\n";
+echo "  Option A: Run locally with WordPress Playground\n";
+echo "    npx @wp-playground/cli@latest server --auto-mount=$slug --login\n";
+echo "\n";
+echo "  Option B: Install in WordPress\n";
 $step = 1;
 if ( ! $in_plugins_dir ) {
-    echo "  $step. Move this folder to wp-content/plugins/\n";
+    echo "    $step. Move this folder to wp-content/plugins/\n";
     $step++;
 }
-echo "  $step. Activate the plugin in WordPress\n";
+echo "    $step. Activate the plugin in WordPress\n";
 $step++;
-echo "  $step. Visit /$url_path/ to see your app\n";
+echo "    $step. Visit /$url_path/ to see your app\n";
 echo "\n";
