@@ -76,7 +76,7 @@ echo "\n";
 $minimal_setup_code = <<<'PHP'
 use WpApp\WpApp;
 
-add_action( 'init', function() {
+add_action( 'plugins_loaded', function() {
     // See https://github.com/akirk/wp-app for documentation.
     $app = new WpApp( __DIR__ . '/templates', '{{url-path}}', [
         // Access control
@@ -115,7 +115,7 @@ spl_autoload_register( function( $class ) {
     }
 } );
 
-add_action( 'init', function() {
+add_action( 'plugins_loaded', function() {
     $app = new App();
     $app->init();
 } );
