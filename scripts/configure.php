@@ -98,6 +98,14 @@ add_action( 'plugins_loaded', function() {
     ] );
     $app->init();
 } );
+
+register_activation_hook( __FILE__, function() {
+    flush_rewrite_rules();
+} );
+
+register_deactivation_hook( __FILE__, function() {
+    flush_rewrite_rules();
+} );
 PHP;
 
 // Define the full setup code with PSR-4 autoloader for plugin classes
@@ -118,6 +126,15 @@ spl_autoload_register( function( $class ) {
 add_action( 'plugins_loaded', function() {
     $app = new App();
     $app->init();
+} );
+
+register_activation_hook( __FILE__, function() {
+    $app = new App();
+    $app->activate();
+} );
+
+register_deactivation_hook( __FILE__, function() {
+    flush_rewrite_rules();
 } );
 PHP;
 

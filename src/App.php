@@ -4,6 +4,7 @@ namespace {{namespace}};
 
 use WpApp\WpApp;
 use WpApp\BaseApp;
+use WpApp\BaseStorage;
 
 class App extends BaseApp {
     public function __construct() {
@@ -37,14 +38,44 @@ class App extends BaseApp {
     }
 
     protected function setup_database(): void {
-        // Set up your database tables here using BaseStorage classes.
+        // Use BaseStorage to manage database tables, for example:
+        //
+        // class {{namespace}}Storage extends BaseStorage {
+        //     protected function get_schema() {
+        //         $charset_collate = $this->wpdb->get_charset_collate();
+        //         return [
+        //             "CREATE TABLE {$this->wpdb->prefix}{{slug}}_items (
+        //                 id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+        //                 user_id bigint(20) unsigned NOT NULL,
+        //                 title varchar(255) NOT NULL,
+        //                 created_at datetime DEFAULT CURRENT_TIMESTAMP,
+        //                 PRIMARY KEY (id),
+        //                 KEY user_id (user_id)
+        //             ) $charset_collate;",
+        //         ];
+        //     }
+        // }
+        //
+        // Then in __construct(): $this->storage = new {{namespace}}Storage();
+        // And in activate():     $this->storage->create_tables();
     }
 
     protected function setup_routes(): void {
-        // $this->app->route( 'posts/{id}' );
+        // $this->app->route( '' );               // -> templates/index.php
+        // $this->app->route( 'dashboard' );      // -> templates/dashboard.php
+        // $this->app->route( 'item/{id}' );      // -> templates/item.php
     }
 
     protected function setup_menu(): void {
-        // $this->app->add_menu_item( 'dashboard', 'Dashboard', home_url( '/' . $this->get_url_path() ) );
+        // $this->app->add_menu_item( 'dashboard', 'Dashboard', home_url( '/{{url-path}}/dashboard' ) );
+    }
+
+    public function activate(): void {
+        // $this->storage->create_tables(); // uncomment if using BaseStorage
+        flush_rewrite_rules();
+    }
+
+    public function deactivate(): void {
+        flush_rewrite_rules();
     }
 }
