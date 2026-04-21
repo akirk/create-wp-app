@@ -38,7 +38,30 @@ class App extends BaseApp {
     }
 
     protected function setup_database(): void {
-        // Use BaseStorage to manage database tables, for example:
+        // Before reaching for custom tables, consider whether WordPress-native
+        // storage is sufficient — it often is, and comes for free:
+        //
+        //   Custom Post Types + post meta
+        //     Good for: content items with titles, content, status, author,
+        //     dates, and arbitrary key/value metadata.
+        //     register_post_type( '{{slug}}_item', [ 'public' => false, ... ] );
+        //     get_posts(), get_post_meta(), update_post_meta()
+        //
+        //   Taxonomies + terms + term meta
+        //     Good for: hierarchical or flat categorization, tag-like grouping,
+        //     or any "type/label" concept that multiple items share.
+        //     register_taxonomy( '{{slug}}_category', '{{slug}}_item', [...] );
+        //     wp_set_object_terms(), get_term_meta(), update_term_meta()
+        //
+        //   User meta
+        //     Good for: per-user settings, preferences, or profile data.
+        //     get_user_meta(), update_user_meta()
+        //
+        // Only use custom tables (BaseStorage) when native entities don't fit —
+        // e.g. high-volume rows, relational data, or non-content records that
+        // don't map cleanly to posts/terms.
+        //
+        // If you do need custom tables, use BaseStorage:
         //
         // class {{namespace}}Storage extends BaseStorage {
         //     protected function get_schema() {
