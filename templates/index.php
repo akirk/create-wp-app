@@ -6,16 +6,17 @@
     <title><?php wp_app_title(); ?></title>
     <?php wp_app_head(); ?>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; line-height: 1.6; color: #1e1e1e; }
+        :root { color-scheme: light dark; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; line-height: 1.6; color: light-dark(#1e1e1e, #e0e0e0); }
         main { max-width: 680px; margin: 2rem auto; padding: 0 1rem; }
         h1 { margin-bottom: 0.5rem; }
-        .subtitle { color: #50575e; margin-top: 0; }
-        .card { background: #f6f7f7; border-radius: 4px; padding: 1.5rem; margin: 1.5rem 0; }
+        .subtitle { color: light-dark(#50575e, #a0a7ae); margin-top: 0; }
+        .card { background: light-dark(#f6f7f7, #2c3338); border-radius: 4px; padding: 1.5rem; margin: 1.5rem 0; }
         .card h2 { margin-top: 0; font-size: 1.1rem; }
-        code { background: #e0e0e0; padding: 0.2em 0.4em; border-radius: 3px; font-size: 0.9em; }
+        code { background: light-dark(#e0e0e0, #3c4347); padding: 0.2em 0.4em; border-radius: 3px; font-size: 0.9em; }
         ul { padding-left: 1.25rem; }
         li { margin: 0.5rem 0; }
-        a { color: #2271b1; }
+        a { color: light-dark(#2271b1, #70b8ff); }
     </style>
 </head>
 <body>
