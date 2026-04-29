@@ -198,11 +198,9 @@ if ( file_exists( 'plugin-name.php' ) && ! file_exists( $new_plugin_file ) ) {
     echo "✓ Renamed plugin-name.php to $new_plugin_file\n";
 }
 
-// Rename gitignore to .gitignore
-if ( file_exists( 'gitignore' ) && ! file_exists( '.gitignore' ) ) {
-    rename( 'gitignore', '.gitignore' );
-    echo "✓ Created .gitignore\n";
-}
+// Create .gitignore
+file_put_contents( '.gitignore', "/vendor/\n" );
+echo "✓ Created .gitignore\n";
 
 // Remove src directory if minimal setup
 if ( ! $is_full_setup && is_dir( 'src' ) ) {
@@ -234,6 +232,11 @@ echo "✓ Updated composer.json\n";
 // Regenerate autoloader with the unique suffix.
 passthru( 'composer dump-autoload --quiet 2>/dev/null || composer dump-autoload' );
 echo "✓ Regenerated autoloader\n";
+
+// Replace README.md with a plugin-specific one
+$readme = "# $plugin_name\n\nA WordPress app powered by [WpApp](https://github.com/akirk/wp-app).\n";
+file_put_contents( 'README.md', $readme );
+echo "✓ Updated README.md\n";
 
 // Clean up: remove scripts directory
 array_map( 'unlink', glob( 'scripts/*' ) );
