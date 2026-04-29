@@ -1,6 +1,6 @@
 {
     "name": "akirk/create-wp-app",
-    "description": "A WordPress app powered by WpApp",
+    "description": "Scaffold a WordPress plugin powered by WpApp",
     "type": "wordpress-plugin",
     "license": "GPL-2.0-or-later",
     "require": {
