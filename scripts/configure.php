@@ -6,7 +6,8 @@
  * Supports non-interactive mode via environment variables:
  *   WP_APP_PLUGIN_NAME  - Plugin name (default: derived from slug)
  *   WP_APP_NAMESPACE    - PHP namespace (default: derived from plugin name)
- *   WP_APP_AUTHOR       - Plugin author
+ *   WP_APP_VENDOR       - Packagist vendor name / username (default: slug)
+ *   WP_APP_AUTHOR       - Plugin author display name
  *   WP_APP_URL_PATH     - URL path for the app (default: slug)
  *   WP_APP_SETUP_TYPE   - "1" for minimal, "2" for full (default: 1)
  */
@@ -51,7 +52,8 @@ echo str_repeat( '-', 40 ) . "\n\n";
 // Get configuration values
 $plugin_name = get_value( 'WP_APP_PLUGIN_NAME', 'Plugin name', slug_to_title( $slug ), $is_interactive );
 $namespace   = get_value( 'WP_APP_NAMESPACE', 'Namespace', to_namespace( $plugin_name ), $is_interactive );
-$author      = get_value( 'WP_APP_AUTHOR', 'Author', '', $is_interactive );
+$vendor      = get_value( 'WP_APP_VENDOR', 'Packagist vendor (your username)', '', $is_interactive );
+$author      = get_value( 'WP_APP_AUTHOR', 'Author name', '', $is_interactive );
 $url_path    = get_value( 'WP_APP_URL_PATH', 'URL path', $slug, $is_interactive );
 
 // Setup type selection
@@ -211,7 +213,8 @@ if ( ! $is_full_setup && is_dir( 'src' ) ) {
 
 // Update composer.json with project details
 $composer_json = json_decode( file_get_contents( 'composer.json' ), true );
-$composer_json['name'] = $slug;
+$composer_json['name'] = ( $vendor !== '' ? $vendor : $slug ) . '/' . $slug;
+$composer_json['version'] = '0.1.0';
 $composer_json['description'] = "$plugin_name - A WordPress app powered by WpApp";
 unset( $composer_json['scripts'] );
 if ( ! empty( $author ) ) {
@@ -224,8 +227,13 @@ if ( $is_full_setup ) {
 } else {
     unset( $composer_json['autoload'] );
 }
+$composer_json['config']['autoloader-suffix'] = preg_replace( '/[^a-zA-Z0-9]/', '', $slug );
 file_put_contents( 'composer.json', json_encode( $composer_json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) . "\n" );
 echo "✓ Updated composer.json\n";
+
+// Regenerate autoloader with the unique suffix.
+passthru( 'composer dump-autoload --quiet 2>/dev/null || composer dump-autoload' );
+echo "✓ Regenerated autoloader\n";
 
 // Clean up: remove scripts directory
 array_map( 'unlink', glob( 'scripts/*' ) );
