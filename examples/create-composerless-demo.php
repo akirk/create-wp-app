@@ -37,3 +37,7 @@ foreach ( $result['messages'] as $message ) {
 echo PHP_EOL;
 echo "Created composer-less demo plugin at: $target_dir" . PHP_EOL;
 echo "Inspect vendor/autoload.php and vendor/akirk/wp-app/ to see the polyfill flow." . PHP_EOL;
+echo PHP_EOL;
+echo "Test it with WordPress Playground:" . PHP_EOL;
+echo "  cd my-playground-app" . PHP_EOL;
+echo "  npx @wp-playground/cli@latest server --auto-mount --login" . PHP_EOL;
