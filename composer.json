@@ -9,6 +9,7 @@
     },
     "autoload": {
         "psr-4": {
+            "Akirk\\CreateWpApp\\": "src/",
             "{{namespace}}\\": "src/"
         }
     },
