@@ -99,7 +99,7 @@ my-plugin/
 
 ## Programmatic Usage
 
-Use `Akirk\CreateWpApp\Scaffolder` when another tool, CLI, or WordPress ability needs to create the app without reimplementing file generation. If `target_dir` does not exist, the scaffolder creates it and seeds the base plugin files before applying the config.
+Use `Akirk\CreateWpApp\Scaffolder` when another tool, CLI, or WordPress ability needs to create the app without reimplementing file generation. If `target_dir` does not exist, the scaffolder creates it and seeds the base plugin files before applying the config. Set `overwrite` to `false` to reject a non-empty target directory before any files are generated.
 
 ### Normal Composer Project
 
@@ -200,6 +200,8 @@ The polyfill intentionally implements only the runtime pieces this scaffold need
 Generated apps include lifecycle extension points. Do not register post types, taxonomies, rewrite rules, dashboard widgets, REST routes, or other WordPress-hooked features directly inside `__construct()`; attach WordPress hooks there and run registration from the proper hook.
 
 Prefer custom post types, post meta, taxonomies, terms, term meta, and user meta before custom tables. Use custom tables and `BaseStorage` only when native WordPress storage does not fit.
+
+For AI Assistant integrations, register focused WordPress Abilities with strict input/output schemas and annotations, then add `ai_assistant_ability_domains` and `ai_assistant_ability_instructions` filters when they help the assistant discover or present app-specific actions. See https://github.com/akirk/ai-assistant/blob/main/docs/plugin-integration.md for further guidance.
 
 After modifying PHP, run a syntax or runtime check before navigating the app.
 

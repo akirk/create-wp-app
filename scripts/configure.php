@@ -9,7 +9,7 @@
  *   WP_APP_AUTHOR       - Plugin author display name
  *   WP_APP_URL_PATH     - URL path for the app (default: slug)
  *   WP_APP_SETUP_TYPE   - "minimal" or "full" (also accepts "m" or "f"; default: full)
- *   WP_APP_OVERWRITE    - "0" to avoid overwriting generated files (default: 1)
+ *   WP_APP_OVERWRITE    - "0" to reject a non-empty target directory (default: 1)
  *   WP_APP_DEPENDENCY_MODE - "composer" or "copy" (default: composer)
  *   WP_APP_AUTOLOAD_MODE   - "composer" or "polyfill" (default: composer)
  */

@@ -32,6 +32,10 @@ class App extends BaseApp {
         // add_action( 'init', [ $this, 'register_post_types' ] );
         // add_action( 'init', [ $this, 'register_taxonomies' ] );
         // add_action( 'wp_dashboard_setup', [ $this, 'register_dashboard_widgets' ] );
+        // add_action( 'wp_abilities_api_categories_init', [ $this, 'register_ability_category' ] );
+        // add_action( 'wp_abilities_api_init', [ $this, 'register_abilities' ] );
+        // add_filter( 'ai_assistant_ability_domains', [ $this, 'register_ai_assistant_ability_domains' ] );
+        // add_filter( 'ai_assistant_ability_instructions', [ $this, 'get_ai_assistant_ability_instructions' ], 10, 4 );
     }
 
     protected function get_url_path(): string {
@@ -142,6 +146,110 @@ class App extends BaseApp {
         /*
          * echo esc_html__( 'Add your dashboard summary here.', '{{slug}}' );
          */
+    }
+
+    public function register_ability_category(): void {
+        // Register an Abilities API category for this plugin.
+        //
+        // if ( ! function_exists( 'wp_register_ability_category' ) ) {
+        //     return;
+        // }
+        //
+        // wp_register_ability_category( '{{slug}}', [
+        //     'label'       => __( '{{plugin-name}}', '{{slug}}' ),
+        //     'description' => __( 'Abilities for {{plugin-name}}.', '{{slug}}' ),
+        // ] );
+    }
+
+    public function register_abilities(): void {
+        // Register focused WordPress Abilities here. AI Assistant can discover
+        // and execute these instead of guessing plugin internals.
+        // See https://github.com/akirk/ai-assistant/blob/main/docs/plugin-integration.md
+        // for AI Assistant-specific guidance.
+        //
+        // if ( ! function_exists( 'wp_register_ability' ) ) {
+        //     return;
+        // }
+        //
+        // wp_register_ability( '{{slug}}/list-items', [
+        //     'label'               => __( 'List {{plugin-name}} Items', '{{slug}}' ),
+        //     'description'         => 'Returns {{plugin-name}} items with IDs and titles for follow-up ability calls.',
+        //     'category'            => '{{slug}}',
+        //     'input_schema'        => [
+        //         'type'                 => 'object',
+        //         'properties'           => [
+        //             'search' => [
+        //                 'type'        => 'string',
+        //                 'description' => 'Optional search term for item titles.',
+        //             ],
+        //         ],
+        //         'additionalProperties' => false,
+        //     ],
+        //     'output_schema'       => [
+        //         'type'       => 'object',
+        //         'properties' => [
+        //             'items' => [
+        //                 'type'  => 'array',
+        //                 'items' => [
+        //                     'type'       => 'object',
+        //                     'properties' => [
+        //                         'id'    => [ 'type' => 'integer', 'description' => 'Use with {{slug}}/get-item.' ],
+        //                         'title' => [ 'type' => 'string' ],
+        //                     ],
+        //                 ],
+        //             ],
+        //         ],
+        //     ],
+        //     'execute_callback'    => [ $this, 'list_ability_items' ],
+        //     'permission_callback' => function() {
+        //         return current_user_can( 'read' );
+        //     },
+        //     'meta'                => [
+        //         'annotations' => [
+        //             'instructions' => 'Use returned item IDs for follow-up detail or edit abilities.',
+        //             'readonly'     => true,
+        //             'destructive'  => false,
+        //             'idempotent'   => true,
+        //         ],
+        //     ],
+        // ] );
+    }
+
+    public function list_ability_items( $input ): array {
+        // Sanitize ability input and return structured data. Return WP_Error
+        // for failures.
+        //
+        // $input = is_array( $input ) ? $input : [];
+        // $search = isset( $input['search'] ) ? sanitize_text_field( $input['search'] ) : '';
+        //
+        // return [
+        //     'items' => [
+        //         [
+        //             'id'    => 123,
+        //             'title' => __( 'Example item', '{{slug}}' ),
+        //         ],
+        //     ],
+        // ];
+        return [
+            'items' => [],
+        ];
+    }
+
+    public function register_ai_assistant_ability_domains( array $domains ): array {
+        // Tell AI Assistant which user terms belong to this plugin so it
+        // considers your abilities for domain-specific requests.
+        //
+        // $domains['{{slug}}'] = '{{plugin-name}}, items, records, dashboard';
+        return $domains;
+    }
+
+    public function get_ai_assistant_ability_instructions( string $instructions, string $ability_id, $args, $result ): string {
+        // Add presentation or follow-up guidance after a specific ability runs.
+        //
+        // if ( '{{slug}}/list-items' === $ability_id && ! empty( $result['items'] ) ) {
+        //     $instructions = 'Present the items as a compact table. Mention that item IDs can be used for follow-up changes.';
+        // }
+        return $instructions;
     }
 
     public function activate(): void {
