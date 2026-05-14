@@ -123,8 +123,8 @@ class Scaffolder {
 
         $slug = $config['slug'] ?? basename( $target_dir );
         $plugin_name = $config['plugin_name'] ?? self::slug_to_title( $slug );
-        $setup_type = (string) ( $config['setup_type'] ?? 'minimal' );
-        $setup_type = in_array( $setup_type, [ '2', 'f', 'full' ], true ) ? 'full' : 'minimal';
+        $setup_type = (string) ( $config['setup_type'] ?? 'full' );
+        $setup_type = in_array( $setup_type, [ '1', 'm', 'minimal' ], true ) ? 'minimal' : 'full';
         $dependency_mode = (string) ( $config['dependency_mode'] ?? 'composer' );
         $dependency_mode = $dependency_mode === 'copy' ? 'copy' : 'composer';
         $autoload_mode = (string) ( $config['autoload_mode'] ?? 'composer' );
@@ -148,11 +148,9 @@ class Scaffolder {
 
     private function get_replacements( array $config, bool $is_full_setup ): array {
         $minimal_setup_code = <<<'PHP'
-use WpApp\WpApp;
-
 add_action( 'plugins_loaded', function() {
     // See https://github.com/akirk/wp-app for documentation.
-    $app = new WpApp( __DIR__ . '/templates', '{{url-path}}', [
+    $app = new \WpApp\WpApp( __DIR__ . '/templates', '{{url-path}}', [
         // Access control
         // 'require_login'      => false,
         // 'require_capability' => 'read',
@@ -214,23 +212,16 @@ PHP;
         $replacements = [
             '{{plugin-name}}' => $config['plugin_name'],
             '{{namespace}}' => $config['namespace'],
+            'WpAppScaffoldNamespace' => $config['namespace'],
             '{{slug}}' => $config['slug'],
+            '{{identifier}}' => $this->to_identifier( $config['slug'] ),
             '{{url-path}}' => $config['url_path'],
             '{{author}}' => $config['author'],
-            '{{minimal-setup}}' => $is_full_setup ? '' : $minimal_setup_code,
-            '{{full-setup}}' => $is_full_setup ? $full_setup_code : '',
+            '/* CreateWpAppFullSetup */' => '',
         ];
 
-        $replacements['{{minimal-setup}}'] = str_replace(
-            array_keys( $replacements ),
-            array_values( $replacements ),
-            $replacements['{{minimal-setup}}']
-        );
-        $replacements['{{full-setup}}'] = str_replace(
-            array_keys( $replacements ),
-            array_values( $replacements ),
-            $replacements['{{full-setup}}']
-        );
+        $setup_code = $is_full_setup ? $full_setup_code : $minimal_setup_code;
+        $replacements['/* CreateWpAppFullSetup */'] = str_replace( array_keys( $replacements ), array_values( $replacements ), $setup_code );
 
         return $replacements;
     }
@@ -240,6 +231,14 @@ PHP;
         $composer_json = json_decode( file_get_contents( $composer_path ), true );
         $composer_json = ( new ComposerJsonFactory() )->create( is_array( $composer_json ) ? $composer_json : [], $config );
         file_put_contents( $composer_path, json_encode( $composer_json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) . "\n" );
+    }
+
+    private function to_identifier( string $slug ): string {
+        $identifier = strtolower( str_replace( '-', '_', $slug ) );
+        $identifier = preg_replace( '/[^a-z0-9_]+/', '_', $identifier );
+        $identifier = trim( $identifier, '_' );
+
+        return $identifier !== '' ? $identifier : 'wp_app';
     }
 
     private function seed_scaffold_files( string $target_dir, bool $overwrite, array &$messages ): void {
