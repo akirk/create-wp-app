@@ -8,13 +8,26 @@ Scaffold a WordPress plugin powered by [WpApp](https://github.com/akirk/wp-app).
 composer create-project akirk/create-wp-app my-plugin
 ```
 
-This will prompt you for:
+This prompts you for:
 
 - **Plugin name** — Display name for your plugin
 - **Namespace** — PHP namespace for your classes
 - **Author** — Plugin author (optional)
 - **URL path** — Where your app lives (e.g., `/my-plugin/`)
-- **Setup type** — Minimal or Full (with BaseApp structure)
+- **Setup type** — Full by default, or Minimal for a small direct `WpApp` setup
+
+The default generated app uses the structured `BaseApp` scaffold:
+
+```text
+my-plugin/
+├── my-plugin.php      # Main plugin file
+├── src/
+│   └── App.php        # BaseApp subclass with routes, menu, and lifecycle hooks
+├── templates/
+│   └── index.php
+├── composer.json
+└── .gitignore
+```
 
 ## Screenshot
 
@@ -22,30 +35,30 @@ This will prompt you for:
 
 ## Setup Types
 
-### Minimal
+### Full
 
-A simple setup with just the essentials:
+The default setup for generated apps:
 
-```
+```text
 my-plugin/
-├── my-plugin.php      # Main plugin file with WpApp initialization
+├── my-plugin.php      # Main plugin file
+├── src/
+│   └── App.php        # BaseApp subclass with routes, menu, and lifecycle hooks
 ├── templates/
-│   └── index.php      # Your app's home page
+│   └── index.php
 ├── composer.json
 └── .gitignore
 ```
 
-### Full
+### Minimal
 
-A structured setup for larger applications:
+A smaller direct `WpApp` setup:
 
-```
+```text
 my-plugin/
-├── my-plugin.php      # Main plugin file
-├── src/
-│   └── App.php        # BaseApp subclass with routes, menu, database hooks
+├── my-plugin.php      # Main plugin file with WpApp initialization
 ├── templates/
-│   └── index.php
+│   └── index.php      # Your app's home page
 ├── composer.json
 └── .gitignore
 ```
@@ -59,7 +72,7 @@ WP_APP_PLUGIN_NAME="My App" \
 WP_APP_NAMESPACE="MyApp" \
 WP_APP_AUTHOR="Your Name" \
 WP_APP_URL_PATH="my-app" \
-WP_APP_SETUP_TYPE="minimal" \
+WP_APP_SETUP_TYPE="full" \
 WP_APP_OVERWRITE="1" \
 WP_APP_DEPENDENCY_MODE="composer" \
 WP_APP_AUTOLOAD_MODE="composer" \
@@ -71,6 +84,8 @@ The command above creates a `my-plugin/` directory, configures the plugin from t
 ```text
 my-plugin/
 ├── my-plugin.php       # Main plugin file for "My App"
+├── src/
+│   └── App.php         # App lifecycle extension points
 ├── templates/
 │   └── index.php       # App home page shown at /my-app/
 ├── vendor/
@@ -80,7 +95,7 @@ my-plugin/
 └── .gitignore
 ```
 
-If `WP_APP_SETUP_TYPE="full"`, the generated directory also includes `src/App.php` and `composer.json` includes PSR-4 autoloading for `MyApp\`.
+`WP_APP_SETUP_TYPE` defaults to `full`. Use `minimal` only when you want the small direct `WpApp` setup.
 
 ## Programmatic Usage
 
@@ -103,7 +118,6 @@ $result = Scaffolder::create( [
     'namespace'       => 'MyApp',
     'author'          => 'Your Name',
     'url_path'        => 'my-app',
-    'setup_type'      => 'minimal', // or 'full'
     // Created automatically if it does not exist.
     'target_dir'      => '/path/to/wp-content/plugins/my-app',
     'overwrite'       => true,
@@ -116,32 +130,18 @@ foreach ( $result['messages'] as $message ) {
 }
 ```
 
-With the example above, the scaffolder creates this minimal plugin:
+The scaffolder creates this full plugin:
 
 ```text
 /path/to/wp-content/plugins/my-app/
 ├── my-app.php          # Main plugin file; requires vendor/autoload.php
+├── src/
+│   └── App.php         # BaseApp subclass for routes, menu, and lifecycle hooks
 ├── templates/
 │   └── index.php       # App home page shown at /my-app/
 ├── vendor/
 │   └── autoload.php    # Composer-generated autoloader
 ├── composer.json       # Normal Composer project requiring akirk/wp-app
-├── README.md
-└── .gitignore
-```
-
-If `setup_type` is `full`, it also keeps `src/App.php` and adds PSR-4 autoloading for your namespace:
-
-```text
-/path/to/wp-content/plugins/my-app/
-├── my-app.php
-├── src/
-│   └── App.php         # BaseApp subclass for routes, menu, and lifecycle hooks
-├── templates/
-│   └── index.php
-├── vendor/
-│   └── autoload.php
-├── composer.json
 ├── README.md
 └── .gitignore
 ```
@@ -163,7 +163,6 @@ $result = Scaffolder::create( [
     'namespace'         => 'MyApp',
     'author'            => 'Your Name',
     'url_path'          => 'my-app',
-    'setup_type'        => 'minimal', // or 'full'
     // Created automatically if it does not exist.
     'target_dir'        => '/path/to/wp-content/plugins/my-app',
     'overwrite'         => true,
@@ -181,6 +180,8 @@ With the Playground example above, the scaffolder creates this self-contained pl
 ```text
 /path/to/wp-content/plugins/my-app/
 ├── my-app.php              # Main plugin file; still requires vendor/autoload.php
+├── src/
+│   └── App.php
 ├── templates/
 │   └── index.php
 ├── vendor/
@@ -192,9 +193,15 @@ With the Playground example above, the scaffolder creates this self-contained pl
 └── .gitignore
 ```
 
-For `setup_type => 'full'`, the same tree also includes `src/App.php` and the root `composer.json` includes your namespace's PSR-4 mapping.
-
 The polyfill intentionally implements only the runtime pieces this scaffold needs; Composer can replace it later with a normal generated autoloader.
+
+## Assistant Guidance
+
+Generated apps include lifecycle extension points. Do not register post types, taxonomies, rewrite rules, dashboard widgets, REST routes, or other WordPress-hooked features directly inside `__construct()`; attach WordPress hooks there and run registration from the proper hook.
+
+Prefer custom post types, post meta, taxonomies, terms, term meta, and user meta before custom tables. Use custom tables and `BaseStorage` only when native WordPress storage does not fit.
+
+After modifying PHP, run a syntax or runtime check before navigating the app.
 
 ## After Setup
 

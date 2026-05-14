@@ -1,6 +1,6 @@
 <?php
 
-namespace {{namespace}};
+namespace WpAppScaffoldNamespace;
 
 use WpApp\WpApp;
 use WpApp\BaseApp;
@@ -27,6 +27,11 @@ class App extends BaseApp {
             // 'my_apps'      => true,
             // 'my_apps_icon' => null,
         ] );
+
+        // Uncomment only when these extension points contain real code.
+        // add_action( 'init', [ $this, 'register_post_types' ] );
+        // add_action( 'init', [ $this, 'register_taxonomies' ] );
+        // add_action( 'wp_dashboard_setup', [ $this, 'register_dashboard_widgets' ] );
     }
 
     protected function get_url_path(): string {
@@ -37,64 +42,114 @@ class App extends BaseApp {
         return dirname( __DIR__ ) . '/templates';
     }
 
+    protected function setup_storage(): void {
+        /*
+         * Prefer WordPress-native storage before custom tables:
+         * - Custom post types and post meta for content-like records.
+         * - Taxonomies, terms, and term meta for shared categories or labels.
+         * - User meta for per-user settings, preferences, and profile data.
+         *
+         * Use BaseStorage only when native entities do not fit, such as
+         * high-volume rows, relational data, or non-content records.
+         *
+         * If you do need custom tables:
+         *
+         * class {{namespace}}Storage extends BaseStorage {
+         *     protected function get_schema() {
+         *         $charset_collate = $this->wpdb->get_charset_collate();
+         *         return [
+         *             "CREATE TABLE {$this->wpdb->prefix}{{identifier}}_items (
+         *                 id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+         *                 user_id bigint(20) unsigned NOT NULL,
+         *                 title varchar(255) NOT NULL,
+         *                 created_at datetime DEFAULT CURRENT_TIMESTAMP,
+         *                 PRIMARY KEY (id),
+         *                 KEY user_id (user_id)
+         *             ) $charset_collate;",
+         *         ];
+         *     }
+         * }
+         *
+         * Then in __construct(): $this->storage = new {{namespace}}Storage();
+         * And in activate():     $this->storage->create_tables();
+         */
+    }
+
     protected function setup_database(): void {
-        // Before reaching for custom tables, consider whether WordPress-native
-        // storage is sufficient — it often is, and comes for free:
-        //
-        //   Custom Post Types + post meta
-        //     Good for: content items with titles, content, status, author,
-        //     dates, and arbitrary key/value metadata.
-        //     register_post_type( '{{slug}}_item', [ 'public' => false, ... ] );
-        //     get_posts(), get_post_meta(), update_post_meta()
-        //
-        //   Taxonomies + terms + term meta
-        //     Good for: hierarchical or flat categorization, tag-like grouping,
-        //     or any "type/label" concept that multiple items share.
-        //     register_taxonomy( '{{slug}}_category', '{{slug}}_item', [...] );
-        //     wp_set_object_terms(), get_term_meta(), update_term_meta()
-        //
-        //   User meta
-        //     Good for: per-user settings, preferences, or profile data.
-        //     get_user_meta(), update_user_meta()
-        //
-        // Only use custom tables (BaseStorage) when native entities don't fit —
-        // e.g. high-volume rows, relational data, or non-content records that
-        // don't map cleanly to posts/terms.
-        //
-        // If you do need custom tables, use BaseStorage:
-        //
-        // class {{namespace}}Storage extends BaseStorage {
-        //     protected function get_schema() {
-        //         $charset_collate = $this->wpdb->get_charset_collate();
-        //         return [
-        //             "CREATE TABLE {$this->wpdb->prefix}{{slug}}_items (
-        //                 id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-        //                 user_id bigint(20) unsigned NOT NULL,
-        //                 title varchar(255) NOT NULL,
-        //                 created_at datetime DEFAULT CURRENT_TIMESTAMP,
-        //                 PRIMARY KEY (id),
-        //                 KEY user_id (user_id)
-        //             ) $charset_collate;",
-        //         ];
-        //     }
-        // }
-        //
-        // Then in __construct(): $this->storage = new {{namespace}}Storage();
-        // And in activate():     $this->storage->create_tables();
+        $this->setup_storage();
     }
 
     protected function setup_routes(): void {
-        // $this->app->route( '' );               // -> templates/index.php
-        // $this->app->route( 'dashboard' );      // -> templates/dashboard.php
-        // $this->app->route( 'item/{id}' );      // -> templates/item.php
+        /*
+         * Add WpApp routes here. BaseApp calls this method during init().
+         *
+         * $this->app->route( '' );               // -> templates/index.php
+         * $this->app->route( 'overview' );       // -> templates/overview.php
+         * $this->app->route( 'item/{id}' );      // -> templates/item.php
+         */
     }
 
     protected function setup_menu(): void {
-        // $this->app->add_menu_item( 'dashboard', 'Dashboard', home_url( '/{{url-path}}/dashboard' ) );
+        /*
+         * Add WpApp masterbar/menu entries here. BaseApp calls this method
+         * during init(), after routes have been registered.
+         *
+         * $this->app->add_menu_item( 'overview', 'Overview', home_url( '/{{url-path}}/overview' ) );
+         */
+    }
+
+    public function register_post_types(): void {
+        /*
+         * Register custom post types here. This method runs on WordPress init.
+         *
+         * register_post_type( '{{identifier}}_item', [
+         *     'label'        => '{{plugin-name}} Items',
+         *     'public'       => false,
+         *     'show_ui'      => true,
+         *     'show_in_rest' => true,
+         *     'supports'     => [ 'title', 'editor', 'author' ],
+         * ] );
+         */
+    }
+
+    public function register_taxonomies(): void {
+        /*
+         * Register taxonomies here. This method runs on WordPress init.
+         *
+         * register_taxonomy( '{{identifier}}_category', '{{identifier}}_item', [
+         *     'label'        => '{{plugin-name}} Categories',
+         *     'hierarchical' => true,
+         *     'show_ui'      => true,
+         *     'show_in_rest' => true,
+         * ] );
+         */
+    }
+
+    public function register_dashboard_widgets(): void {
+        /*
+         * Register dashboard widgets here. This method runs on
+         * wp_dashboard_setup.
+         *
+         * wp_add_dashboard_widget(
+         *     '{{identifier}}_dashboard',
+         *     '{{plugin-name}}',
+         *     [ $this, 'render_dashboard_widget' ]
+         * );
+         */
+    }
+
+    public function render_dashboard_widget(): void {
+        /*
+         * echo esc_html__( 'Add your dashboard summary here.', '{{slug}}' );
+         */
     }
 
     public function activate(): void {
-        // $this->storage->create_tables(); // uncomment if using BaseStorage
+        /*
+         * If using BaseStorage, create/update custom tables here:
+         *
+         * $this->storage->create_tables();
+         */
         flush_rewrite_rules();
     }
 

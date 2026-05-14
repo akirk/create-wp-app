@@ -8,7 +8,7 @@
  * Requires PHP: 7.4
  */
 
-namespace {{namespace}};
+namespace WpAppScaffoldNamespace;
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
@@ -16,5 +16,4 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 require_once __DIR__ . '/vendor/autoload.php';
 
-{{minimal-setup}}
-{{full-setup}}
+/* CreateWpAppFullSetup */

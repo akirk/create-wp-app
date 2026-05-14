@@ -8,7 +8,7 @@
  *   WP_APP_NAMESPACE    - PHP namespace (default: derived from plugin name)
  *   WP_APP_AUTHOR       - Plugin author display name
  *   WP_APP_URL_PATH     - URL path for the app (default: slug)
- *   WP_APP_SETUP_TYPE   - "minimal" or "full" (also accepts "m" or "f")
+ *   WP_APP_SETUP_TYPE   - "minimal" or "full" (also accepts "m" or "f"; default: full)
  *   WP_APP_OVERWRITE    - "0" to avoid overwriting generated files (default: 1)
  *   WP_APP_DEPENDENCY_MODE - "composer" or "copy" (default: composer)
  *   WP_APP_AUTOLOAD_MODE   - "composer" or "polyfill" (default: composer)
@@ -57,9 +57,9 @@ if ( $setup_type_env !== false && in_array( $setup_type_env, [ 'minimal', 'full'
     echo "Setup type:\n";
     echo "  [m] Minimal - simple WpApp setup\n";
     echo "  [f] Full - with BaseApp structure\n";
-    $setup_type = get_value( '', 'Choose', 'm', true );
+    $setup_type = get_value( '', 'Choose', 'f', true );
 } else {
-    $setup_type = 'minimal';
+    $setup_type = 'full';
 }
 
 $overwrite_env = getenv( 'WP_APP_OVERWRITE' );
