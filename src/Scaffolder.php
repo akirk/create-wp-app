@@ -19,7 +19,7 @@ class Scaffolder {
             $messages[] = '✓ Created target directory';
         }
 
-        $this->seed_scaffold_files( $target_dir, $config['overwrite'], $messages );
+        $this->seed_scaffold_files( $target_dir, $messages );
 
         $replacements = $this->get_replacements( $config, $is_full_setup );
         $files_to_process = [
@@ -47,19 +47,15 @@ class Scaffolder {
         $plugin_file = $this->path( $target_dir, 'plugin-name.php' );
         $new_plugin_path = $this->path( $target_dir, $new_plugin_file );
         if ( file_exists( $plugin_file ) ) {
-            if ( file_exists( $new_plugin_path ) && $config['overwrite'] ) {
+            if ( file_exists( $new_plugin_path ) ) {
                 unlink( $new_plugin_path );
             }
 
-            if ( ! file_exists( $new_plugin_path ) ) {
-                rename( $plugin_file, $new_plugin_path );
-                $messages[] = "✓ Renamed plugin-name.php to $new_plugin_file";
-            } else {
-                $messages[] = "- Skipped plugin-name.php rename because $new_plugin_file exists";
-            }
+            rename( $plugin_file, $new_plugin_path );
+            $messages[] = "✓ Renamed plugin-name.php to $new_plugin_file";
         }
 
-        $this->write_file( $target_dir, '.gitignore', "/vendor/\n", $config['overwrite'], $messages, 'Created .gitignore' );
+        $this->write_file( $target_dir, '.gitignore', "/vendor/\n", $messages, 'Created .gitignore' );
 
         if ( ! $is_full_setup && is_dir( $this->path( $target_dir, 'src' ) ) ) {
             $this->remove_src_directory( $target_dir );
@@ -70,7 +66,7 @@ class Scaffolder {
         $messages[] = '✓ Updated composer.json';
 
         if ( $config['dependency_mode'] === 'copy' ) {
-            ( new DependencyCopier() )->copy_wp_app( $target_dir, $config['overwrite'], $config['wp_app_source_dir'] );
+            ( new DependencyCopier() )->copy_wp_app( $target_dir, true, $config['wp_app_source_dir'] );
             $messages[] = '✓ Copied akirk/wp-app into vendor/';
         }
 
@@ -83,7 +79,7 @@ class Scaffolder {
         }
 
         $readme = "# {$config['plugin_name']}\n\nA WordPress app powered by [WpApp](https://github.com/akirk/wp-app).\n";
-        $this->write_file( $target_dir, 'README.md', $readme, $config['overwrite'], $messages, 'Updated README.md' );
+        $this->write_file( $target_dir, 'README.md', $readme, $messages, 'Updated README.md' );
 
         $this->cleanup_setup_files( $target_dir, $is_full_setup );
         $messages[] = '✓ Cleaned up setup scripts';
@@ -111,8 +107,17 @@ class Scaffolder {
         $config = is_array( $config ) ? $config : [];
         $target_dir = $config['target_dir'] ?? getcwd();
         $target_dir = rtrim( $target_dir, DIRECTORY_SEPARATOR );
+        $overwrite = (bool) ( $config['overwrite'] ?? true );
 
         $created_target_dir = false;
+        if ( file_exists( $target_dir ) && ! is_dir( $target_dir ) ) {
+            throw new \RuntimeException( "Target path exists and is not a directory: $target_dir" );
+        }
+
+        if ( is_dir( $target_dir ) && ! $overwrite && ! $this->is_directory_empty( $target_dir ) ) {
+            throw new \RuntimeException( "Target directory already exists and is not empty: $target_dir" );
+        }
+
         if ( ! is_dir( $target_dir ) ) {
             if ( ! mkdir( $target_dir, 0777, true ) && ! is_dir( $target_dir ) ) {
                 throw new \RuntimeException( "Could not create target directory: $target_dir" );
@@ -139,11 +144,30 @@ class Scaffolder {
             'setup_type' => $setup_type,
             'target_dir' => $target_dir,
             'created_target_dir' => $created_target_dir,
-            'overwrite' => (bool) ( $config['overwrite'] ?? true ),
+            'overwrite' => $overwrite,
             'dependency_mode' => $dependency_mode,
             'autoload_mode' => $autoload_mode,
             'wp_app_source_dir' => $config['wp_app_source_dir'] ?? null,
         ];
+    }
+
+    private function is_directory_empty( string $directory ): bool {
+        $handle = opendir( $directory );
+        if ( false === $handle ) {
+            throw new \RuntimeException( "Could not read target directory: $directory" );
+        }
+
+        while ( false !== ( $entry = readdir( $handle ) ) ) {
+            if ( $entry === '.' || $entry === '..' ) {
+                continue;
+            }
+
+            closedir( $handle );
+            return false;
+        }
+
+        closedir( $handle );
+        return true;
     }
 
     private function get_replacements( array $config, bool $is_full_setup ): array {
@@ -241,12 +265,11 @@ PHP;
         return $identifier !== '' ? $identifier : 'wp_app';
     }
 
-    private function seed_scaffold_files( string $target_dir, bool $overwrite, array &$messages ): void {
+    private function seed_scaffold_files( string $target_dir, array &$messages ): void {
         $source_dir = dirname( __DIR__ );
         $files = [
             'composer.json',
             'plugin-name.php',
-            'README.md',
             'src/App.php',
             'templates/index.php',
         ];
@@ -256,11 +279,6 @@ PHP;
             $destination = $this->path( $target_dir, $file );
 
             if ( ! file_exists( $source ) || realpath( $source ) === realpath( $destination ) ) {
-                continue;
-            }
-
-            if ( file_exists( $destination ) && ! $overwrite ) {
-                $messages[] = "- Skipped $file because it exists";
                 continue;
             }
 
@@ -288,13 +306,8 @@ PHP;
         passthru( $command );
     }
 
-    private function write_file( string $target_dir, string $file, string $content, bool $overwrite, array &$messages, string $message ): void {
+    private function write_file( string $target_dir, string $file, string $content, array &$messages, string $message ): void {
         $path = $this->path( $target_dir, $file );
-        if ( file_exists( $path ) && ! $overwrite ) {
-            $messages[] = "- Skipped $file because it exists";
-            return;
-        }
-
         file_put_contents( $path, $content );
         $messages[] = "✓ $message";
     }
@@ -321,7 +334,7 @@ PHP;
         }
 
         if ( $is_full_setup ) {
-            foreach ( [ 'Scaffolder.php', 'ComposerJsonFactory.php', 'AutoloadPolyfillFactory.php', 'DependencyCopier.php', 'AbilityRegistration.php' ] as $file ) {
+            foreach ( [ 'Scaffolder.php', 'ComposerJsonFactory.php', 'AutoloadPolyfillFactory.php', 'DependencyCopier.php' ] as $file ) {
                 $path = $this->path( $target_dir, 'src/' . $file );
                 if ( file_exists( $path ) ) {
                     unlink( $path );
