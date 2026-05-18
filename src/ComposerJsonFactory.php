@@ -10,7 +10,7 @@ class ComposerJsonFactory {
         $composer_json['name'] = $config['slug'] . '/' . $config['slug'];
         $composer_json['version'] = '0.1.0';
         $composer_json['description'] = $config['plugin_name'] . ' - A WordPress app powered by WpApp';
-        unset( $composer_json['scripts'] );
+        unset( $composer_json['archive'], $composer_json['scripts'] );
 
         if ( ! empty( $config['author'] ) ) {
             $composer_json['authors'] = [ [ 'name' => $config['author'] ] ];

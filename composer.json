@@ -13,6 +13,12 @@
             "{{namespace}}\\": "src/"
         }
     },
+    "archive": {
+        "exclude": [
+            "/examples",
+            "/skills"
+        ]
+    },
     "scripts": {
         "post-create-project-cmd": "php scripts/configure.php"
     }

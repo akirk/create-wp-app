@@ -323,14 +323,8 @@ PHP;
     }
 
     private function cleanup_setup_files( string $target_dir, bool $is_full_setup ): void {
-        foreach ( glob( $this->path( $target_dir, 'scripts/*' ) ) as $file ) {
-            if ( is_file( $file ) ) {
-                unlink( $file );
-            }
-        }
-
-        if ( is_dir( $this->path( $target_dir, 'scripts' ) ) ) {
-            rmdir( $this->path( $target_dir, 'scripts' ) );
+        foreach ( [ 'examples', 'scripts', 'skills' ] as $directory ) {
+            $this->remove_directory( $this->path( $target_dir, $directory ) );
         }
 
         if ( $is_full_setup ) {
@@ -341,6 +335,33 @@ PHP;
                 }
             }
         }
+    }
+
+    private function remove_directory( string $directory ): void {
+        if ( ! is_dir( $directory ) ) {
+            return;
+        }
+
+        $items = scandir( $directory );
+        if ( $items === false ) {
+            throw new \RuntimeException( "Could not read directory: $directory" );
+        }
+
+        foreach ( $items as $item ) {
+            if ( $item === '.' || $item === '..' ) {
+                continue;
+            }
+
+            $path = $directory . DIRECTORY_SEPARATOR . $item;
+            if ( is_dir( $path ) && ! is_link( $path ) ) {
+                $this->remove_directory( $path );
+                continue;
+            }
+
+            unlink( $path );
+        }
+
+        rmdir( $directory );
     }
 
     private function path( string $target_dir, string $path ): string {
