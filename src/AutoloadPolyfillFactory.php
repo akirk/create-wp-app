@@ -16,6 +16,7 @@ class AutoloadPolyfillFactory {
         return <<<'PHP'
 <?php
 
+return ( static function(): bool {
 $root_dir = dirname( __DIR__ );
 $vendor_dir = __DIR__;
 
@@ -108,6 +109,7 @@ spl_autoload_register( static function( string $class ) use ( $prefixes, $is_pat
 } );
 
 return true;
+} )();
 PHP;
     }
 }
