@@ -97,6 +97,51 @@ my-plugin/
 
 `WP_APP_SETUP_TYPE` defaults to `full`. Use `minimal` only when you want the small direct `WpApp` setup.
 
+## Convert an Existing Frontend App
+
+Use convert mode when you already have a static frontend app and want to wrap it in a WpApp plugin:
+
+```bash
+cd /path/to/existing-react-app
+npm run build
+
+WP_APP_MODE="convert" \
+WP_APP_SOURCE_APP_DIR="/path/to/existing-react-app" \
+WP_APP_PLUGIN_NAME="Times Table Tester" \
+WP_APP_NAMESPACE="TimesTableTester" \
+WP_APP_URL_PATH="times-table-tester" \
+composer create-project akirk/create-wp-app times-table-tester
+```
+
+Convert mode auto-detects a deployable root `index.html`, `build/`, and `dist/` inside `WP_APP_SOURCE_APP_DIR`. If your app output lives somewhere else, pass it directly:
+
+```bash
+WP_APP_MODE="convert" \
+WP_APP_SOURCE_BUILD_DIR="/path/to/existing-app/out" \
+composer create-project akirk/create-wp-app my-plugin
+```
+
+The generated plugin copies the static app to `app/` by default and replaces `templates/index.php` with a WpApp-aware shell. Asset URLs from the imported `index.html` are rewritten to `plugins_url()` so scripts, stylesheets, icons, and manifests load from the plugin directory. Change the destination directory with `WP_APP_FRONTEND_ASSET_DIR`.
+
+Plain HTML prototypes can use a root `index.html`. For Create React App projects, set `"homepage": "."` or build with `PUBLIC_URL=.` before conversion so chunk URLs stay relative. Apps that use client-side routing should prefer hash routing or configure their router basename for the WpApp URL path.
+
+### Augment the Current App Directory
+
+Composer cannot run `create-project` directly into a non-empty app directory; it fails before create-wp-app code can run. For that workflow, build the frontend and run the augmenter from inside the existing app:
+
+```bash
+cd /path/to/existing-react-app
+npm run build
+php /path/to/create-wp-app/scripts/augment.php
+composer install
+```
+
+This preserves the existing frontend source and adds the WordPress plugin files, `templates/`, imported assets in `app/`, and Composer metadata. Pass a target directory as the first argument when you are not running it from the app root:
+
+```bash
+php /path/to/create-wp-app/scripts/augment.php /path/to/existing-react-app
+```
+
 ## Programmatic Usage
 
 Use `Akirk\CreateWpApp\Scaffolder` when another tool, CLI, or WordPress ability needs to create the app without reimplementing file generation. If `target_dir` does not exist, the scaffolder creates it and seeds the base plugin files before applying the config. Set `overwrite` to `false` to reject a non-empty target directory before any files are generated.
@@ -194,6 +239,29 @@ With the Playground example above, the scaffolder creates this self-contained pl
 ```
 
 The polyfill intentionally implements only the runtime pieces this scaffold needs; Composer can replace it later with a normal generated autoloader.
+
+### Convert a Built Static App
+
+Pass `source_app_dir` or `source_build_dir` to import an existing static frontend during scaffolding:
+
+```php
+<?php
+
+require_once __DIR__ . '/vendor/autoload.php';
+
+use Akirk\CreateWpApp\Scaffolder;
+
+$result = Scaffolder::create( [
+    'slug'             => 'times-table-tester',
+    'plugin_name'      => 'Times Table Tester',
+    'namespace'        => 'TimesTableTester',
+    'url_path'         => 'times-table-tester',
+    'target_dir'       => '/path/to/wp-content/plugins/times-table-tester',
+    'source_app_dir'   => '/path/to/existing-react-app',
+    // Optional when the app build is not in build/ or dist/.
+    // 'source_build_dir' => '/path/to/existing-react-app/out',
+] );
+```
 
 ## Assistant Guidance
 

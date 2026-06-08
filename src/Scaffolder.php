@@ -62,6 +62,8 @@ class Scaffolder {
             $messages[] = '✓ Removed src/ directory (not needed for minimal setup)';
         }
 
+        $messages = array_merge( $messages, ( new StaticAppImporter() )->import( $target_dir, $config ) );
+
         $this->update_composer_json( $target_dir, $config );
         $messages[] = '✓ Updated composer.json';
 
@@ -79,6 +81,9 @@ class Scaffolder {
         }
 
         $readme = "# {$config['plugin_name']}\n\nA WordPress app powered by [WpApp](https://github.com/akirk/wp-app).\n";
+        if ( ! empty( $config['source_app_dir'] ) || ! empty( $config['source_build_dir'] ) ) {
+            $readme .= "\nImported frontend assets live in `{$config['frontend_asset_dir']}/`. Rebuild the source app and run conversion again when the frontend changes.\n";
+        }
         $this->write_file( $target_dir, 'README.md', $readme, $messages, 'Updated README.md' );
 
         $this->cleanup_setup_files( $target_dir, $is_full_setup );
@@ -148,6 +153,9 @@ class Scaffolder {
             'dependency_mode' => $dependency_mode,
             'autoload_mode' => $autoload_mode,
             'wp_app_source_dir' => $config['wp_app_source_dir'] ?? null,
+            'source_app_dir' => $config['source_app_dir'] ?? null,
+            'source_build_dir' => $config['source_build_dir'] ?? null,
+            'frontend_asset_dir' => $config['frontend_asset_dir'] ?? 'app',
         ];
     }
 
@@ -293,7 +301,7 @@ PHP;
     }
 
     private function load_support_classes(): void {
-        foreach ( [ 'ComposerJsonFactory', 'AutoloadPolyfillFactory', 'DependencyCopier' ] as $class ) {
+        foreach ( [ 'ComposerJsonFactory', 'AutoloadPolyfillFactory', 'DependencyCopier', 'StaticAppImporter' ] as $class ) {
             $qualified_class = __NAMESPACE__ . '\\' . $class;
             if ( ! class_exists( $qualified_class ) ) {
                 require_once __DIR__ . DIRECTORY_SEPARATOR . $class . '.php';
@@ -328,7 +336,7 @@ PHP;
         }
 
         if ( $is_full_setup ) {
-            foreach ( [ 'Scaffolder.php', 'ComposerJsonFactory.php', 'AutoloadPolyfillFactory.php', 'DependencyCopier.php' ] as $file ) {
+            foreach ( [ 'Scaffolder.php', 'ComposerJsonFactory.php', 'AutoloadPolyfillFactory.php', 'DependencyCopier.php', 'StaticAppImporter.php', 'ExistingAppAugmenter.php' ] as $file ) {
                 $path = $this->path( $target_dir, 'src/' . $file );
                 if ( file_exists( $path ) ) {
                     unlink( $path );

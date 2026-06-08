@@ -1,0 +1,260 @@
+<?php
+
+namespace Akirk\CreateWpApp;
+
+class StaticAppImporter {
+    public function import( string $target_dir, array $config ): array {
+        $source_app_dir = $config['source_app_dir'] ?? null;
+        $source_build_dir = $config['source_build_dir'] ?? null;
+
+        if ( empty( $source_app_dir ) && empty( $source_build_dir ) ) {
+            return [];
+        }
+
+        $build_dir = $this->resolve_build_dir( $source_app_dir, $source_build_dir );
+        $asset_dir = $this->normalize_asset_dir( $config['frontend_asset_dir'] ?? 'app' );
+        $destination_dir = $target_dir . DIRECTORY_SEPARATOR . str_replace( '/', DIRECTORY_SEPARATOR, $asset_dir );
+
+        if ( is_dir( $destination_dir ) ) {
+            $this->remove_directory( $destination_dir );
+        }
+
+        $this->copy_directory( $build_dir, $destination_dir );
+
+        $index_html = $build_dir . DIRECTORY_SEPARATOR . 'index.html';
+        if ( ! is_file( $index_html ) ) {
+            throw new \RuntimeException( "Static app build does not contain index.html: $build_dir" );
+        }
+
+        $html = file_get_contents( $index_html );
+        if ( $html === false ) {
+            throw new \RuntimeException( "Could not read static app index.html: $index_html" );
+        }
+
+        $template = $this->create_template( $html, $asset_dir, $config['slug'] );
+
+        file_put_contents( $target_dir . DIRECTORY_SEPARATOR . 'templates' . DIRECTORY_SEPARATOR . 'index.php', $template );
+
+        return [
+            "✓ Imported static app build from $build_dir",
+            "✓ Copied frontend assets to $asset_dir/",
+            '✓ Replaced templates/index.php with imported app shell',
+        ];
+    }
+
+    private function resolve_build_dir( ?string $source_app_dir, ?string $source_build_dir ): string {
+        if ( ! empty( $source_build_dir ) ) {
+            $build_dir = $this->normalize_directory( $source_build_dir );
+            if ( is_file( $build_dir . DIRECTORY_SEPARATOR . 'index.html' ) ) {
+                return $build_dir;
+            }
+
+            throw new \RuntimeException( "Static app build directory must contain index.html: $build_dir" );
+        }
+
+        if ( empty( $source_app_dir ) ) {
+            throw new \RuntimeException( 'Conversion mode requires source_app_dir or source_build_dir.' );
+        }
+
+        $source_app_dir = $this->normalize_directory( $source_app_dir );
+        $candidates = [
+            $source_app_dir . DIRECTORY_SEPARATOR . 'build',
+            $source_app_dir . DIRECTORY_SEPARATOR . 'dist',
+        ];
+
+        foreach ( $candidates as $candidate ) {
+            if ( is_file( $candidate . DIRECTORY_SEPARATOR . 'index.html' ) ) {
+                return $candidate;
+            }
+        }
+
+        $root_index = $source_app_dir . DIRECTORY_SEPARATOR . 'index.html';
+        if ( is_file( $root_index ) && $this->is_deployable_root_index( $root_index ) ) {
+            return $source_app_dir;
+        }
+
+        $hint = is_file( $source_app_dir . DIRECTORY_SEPARATOR . 'package.json' )
+            ? ' Run the app build first, use a deployable root index.html, or set source_build_dir explicitly.'
+            : ' Set source_build_dir to a directory that contains index.html.';
+
+        throw new \RuntimeException( "Could not find a static app build in $source_app_dir." . $hint );
+    }
+
+    private function is_deployable_root_index( string $index_html ): bool {
+        $html = file_get_contents( $index_html );
+        if ( $html === false ) {
+            throw new \RuntimeException( "Could not read root index.html: $index_html" );
+        }
+
+        if ( strpos( $html, '%PUBLIC_URL%' ) !== false ) {
+            return false;
+        }
+
+        return ! preg_match( '#\b(?:src|href)=([\'"])/?src/#i', $html );
+    }
+
+    private function normalize_directory( string $directory ): string {
+        $directory = rtrim( $directory, DIRECTORY_SEPARATOR );
+
+        if ( ! is_dir( $directory ) ) {
+            throw new \RuntimeException( "Directory does not exist: $directory" );
+        }
+
+        return $directory;
+    }
+
+    private function normalize_asset_dir( string $asset_dir ): string {
+        $asset_dir = trim( str_replace( '\\', '/', $asset_dir ), '/' );
+
+        if ( $asset_dir === '' || $asset_dir === '.' || strpos( $asset_dir, '..' ) !== false ) {
+            throw new \RuntimeException( 'frontend_asset_dir must be a relative directory inside the generated plugin.' );
+        }
+
+        return $asset_dir;
+    }
+
+    private function create_template( string $html, string $asset_dir, string $slug ): string {
+        $head = $this->extract_tag_contents( $html, 'head' );
+        $body = $this->extract_tag_contents( $html, 'body' );
+
+        $head = $this->rewrite_asset_urls( $head );
+        $body = $this->rewrite_asset_urls( $body );
+
+        $head = preg_replace( '/<title\b[^>]*>.*?<\/title>/is', '<title><?php wp_app_title(); ?></title>', $head, 1, $title_replacements );
+        if ( $title_replacements === 0 ) {
+            $head = "<title><?php wp_app_title(); ?></title>\n" . ltrim( $head );
+        }
+
+        $plugin_file = $slug . '.php';
+        $asset_dir_export = var_export( $asset_dir, true );
+        $plugin_file_export = var_export( $plugin_file, true );
+        $head = $this->indent( trim( $head ), '    ' );
+        $body = $this->indent( trim( $body ), '    ' );
+
+        return <<<PHP
+<?php
+\$asset_url = static function( string \$path ): string {
+    return plugins_url( {$asset_dir_export} . '/' . ltrim( \$path, '/' ), dirname( __DIR__ ) . '/' . {$plugin_file_export} );
+};
+?>
+<!DOCTYPE html>
+<html <?php wp_app_language_attributes(); ?>>
+<head>
+{$head}
+    <?php wp_app_head(); ?>
+</head>
+<body>
+    <?php wp_app_body_open(); ?>
+{$body}
+    <?php wp_app_body_close(); ?>
+</body>
+</html>
+PHP;
+    }
+
+    private function extract_tag_contents( string $html, string $tag ): string {
+        if ( preg_match( '/<' . preg_quote( $tag, '/' ) . '\b[^>]*>(.*?)<\/' . preg_quote( $tag, '/' ) . '>/is', $html, $matches ) ) {
+            return trim( $matches[1] );
+        }
+
+        return '';
+    }
+
+    private function rewrite_asset_urls( string $html ): string {
+        return preg_replace_callback(
+            '/\b(src|href)=([\'"])([^\'"]+)\2/i',
+            function( array $matches ): string {
+                $path = $this->to_local_asset_path( html_entity_decode( $matches[3], ENT_QUOTES ) );
+                if ( $path === null ) {
+                    return $matches[0];
+                }
+
+                $path_export = var_export( $path, true );
+                return $matches[1] . '=' . $matches[2] . '<?php echo esc_url( $asset_url( ' . $path_export . ' ) ); ?>' . $matches[2];
+            },
+            $html
+        );
+    }
+
+    private function to_local_asset_path( string $url ): ?string {
+        $url = trim( $url );
+
+        if ( $url === '' || $url[0] === '#' || $url[0] === '?' ) {
+            return null;
+        }
+
+        if ( preg_match( '/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i', $url ) ) {
+            return null;
+        }
+
+        if ( strpos( $url, '%PUBLIC_URL%/' ) === 0 ) {
+            $url = substr( $url, strlen( '%PUBLIC_URL%/' ) );
+        }
+
+        $url = preg_replace( '/[?#].*$/', '', $url );
+        $url = preg_replace( '#^\./#', '', $url );
+        $url = ltrim( $url, '/' );
+
+        return $url !== '' ? $url : null;
+    }
+
+    private function indent( string $content, string $indent ): string {
+        if ( $content === '' ) {
+            return '';
+        }
+
+        return $indent . str_replace( "\n", "\n" . $indent, $content );
+    }
+
+    private function copy_directory( string $source, string $destination ): void {
+        if ( ! is_dir( $destination ) ) {
+            if ( ! mkdir( $destination, 0777, true ) && ! is_dir( $destination ) ) {
+                throw new \RuntimeException( "Could not create directory: $destination" );
+            }
+        }
+
+        $entries = scandir( $source );
+        if ( $entries === false ) {
+            throw new \RuntimeException( "Could not read directory: $source" );
+        }
+
+        foreach ( $entries as $entry ) {
+            if ( in_array( $entry, [ '.', '..' ], true ) ) {
+                continue;
+            }
+
+            $source_path = $source . DIRECTORY_SEPARATOR . $entry;
+            $destination_path = $destination . DIRECTORY_SEPARATOR . $entry;
+
+            if ( is_dir( $source_path ) && ! is_link( $source_path ) ) {
+                $this->copy_directory( $source_path, $destination_path );
+                continue;
+            }
+
+            copy( $source_path, $destination_path );
+        }
+    }
+
+    private function remove_directory( string $directory ): void {
+        $entries = scandir( $directory );
+        if ( $entries === false ) {
+            throw new \RuntimeException( "Could not read directory: $directory" );
+        }
+
+        foreach ( $entries as $entry ) {
+            if ( in_array( $entry, [ '.', '..' ], true ) ) {
+                continue;
+            }
+
+            $path = $directory . DIRECTORY_SEPARATOR . $entry;
+            if ( is_dir( $path ) && ! is_link( $path ) ) {
+                $this->remove_directory( $path );
+                continue;
+            }
+
+            unlink( $path );
+        }
+
+        rmdir( $directory );
+    }
+}

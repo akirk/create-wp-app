@@ -12,6 +12,11 @@
  *   WP_APP_OVERWRITE    - "0" to reject a non-empty target directory (default: 1)
  *   WP_APP_DEPENDENCY_MODE - "composer" or "copy" (default: composer)
  *   WP_APP_AUTOLOAD_MODE   - "composer" or "polyfill" (default: composer)
+ *   WP_APP_MODE            - "scaffold" or "convert" (default: scaffold)
+ *   WP_APP_SOURCE_APP_DIR  - Existing app root to convert (auto-detects build/ or dist/)
+ *   WP_APP_CONVERT_FROM    - Alias for WP_APP_SOURCE_APP_DIR
+ *   WP_APP_SOURCE_BUILD_DIR - Existing static build directory containing index.html
+ *   WP_APP_FRONTEND_ASSET_DIR - Plugin directory for imported frontend assets (default: app)
  */
 
 use Akirk\CreateWpApp\Scaffolder;
@@ -66,11 +71,23 @@ $overwrite_env = getenv( 'WP_APP_OVERWRITE' );
 $overwrite = $overwrite_env === false ? true : ! in_array( $overwrite_env, [ '0', 'false', 'no' ], true );
 $dependency_mode = getenv( 'WP_APP_DEPENDENCY_MODE' ) ?: 'composer';
 $autoload_mode = getenv( 'WP_APP_AUTOLOAD_MODE' ) ?: 'composer';
+$mode = getenv( 'WP_APP_MODE' ) ?: 'scaffold';
+$source_app_dir = getenv( 'WP_APP_SOURCE_APP_DIR' ) ?: ( getenv( 'WP_APP_CONVERT_FROM' ) ?: '' );
+$source_build_dir = getenv( 'WP_APP_SOURCE_BUILD_DIR' ) ?: '';
+$frontend_asset_dir = getenv( 'WP_APP_FRONTEND_ASSET_DIR' ) ?: 'app';
+
+if ( $mode === 'convert' && $source_app_dir === '' && $source_build_dir === '' && $is_interactive ) {
+    echo "\n";
+    $source_app_dir = get_value( '', 'Existing app directory to convert', '', true );
+}
+
+if ( $mode === 'convert' && $source_app_dir === '' && $source_build_dir === '' ) {
+    throw new RuntimeException( 'WP_APP_MODE=convert requires WP_APP_SOURCE_APP_DIR or WP_APP_SOURCE_BUILD_DIR.' );
+}
 
 echo "\n";
 
-$scaffolder = new Scaffolder();
-$result = $scaffolder->scaffold( [
+$config = [
     'slug' => $slug,
     'plugin_name' => $plugin_name,
     'namespace' => $namespace,
@@ -81,7 +98,16 @@ $result = $scaffolder->scaffold( [
     'overwrite' => $overwrite,
     'dependency_mode' => $dependency_mode,
     'autoload_mode' => $autoload_mode,
-] );
+];
+
+if ( $mode === 'convert' || $source_app_dir !== '' || $source_build_dir !== '' ) {
+    $config['source_app_dir'] = $source_app_dir;
+    $config['source_build_dir'] = $source_build_dir;
+    $config['frontend_asset_dir'] = $frontend_asset_dir;
+}
+
+$scaffolder = new Scaffolder();
+$result = $scaffolder->scaffold( $config );
 
 foreach ( $result['messages'] as $message ) {
     echo "$message\n";
