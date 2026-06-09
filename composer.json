@@ -20,6 +20,7 @@
         ]
     },
     "scripts": {
-        "post-create-project-cmd": "php scripts/configure.php"
+        "post-create-project-cmd": "php scripts/configure.php",
+        "test": "php tests/static-app-conversion.php"
     }
 }

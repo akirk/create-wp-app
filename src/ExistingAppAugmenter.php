@@ -49,7 +49,7 @@ class ExistingAppAugmenter {
                 $messages,
                 'Added WpApp templates/'
             );
-            $this->replace_directory(
+            $this->replace_asset_directory(
                 $temporary_dir . DIRECTORY_SEPARATOR . str_replace( '/', DIRECTORY_SEPARATOR, $config['frontend_asset_dir'] ),
                 $target_dir . DIRECTORY_SEPARATOR . str_replace( '/', DIRECTORY_SEPARATOR, $config['frontend_asset_dir'] ),
                 $messages,
@@ -100,7 +100,7 @@ class ExistingAppAugmenter {
             'autoload_mode' => $config['autoload_mode'] ?? getenv( 'WP_APP_AUTOLOAD_MODE' ) ?: 'composer',
             'wp_app_source_dir' => $config['wp_app_source_dir'] ?? getenv( 'WP_APP_SOURCE_DIR' ) ?: null,
             'source_build_dir' => $config['source_build_dir'] ?? getenv( 'WP_APP_SOURCE_BUILD_DIR' ) ?: null,
-            'frontend_asset_dir' => $config['frontend_asset_dir'] ?? getenv( 'WP_APP_FRONTEND_ASSET_DIR' ) ?: 'app',
+            'frontend_asset_dir' => $config['frontend_asset_dir'] ?? getenv( 'WP_APP_FRONTEND_ASSET_DIR' ) ?: 'wp-app',
         ];
     }
 
@@ -150,6 +150,17 @@ class ExistingAppAugmenter {
 
         $this->copy_directory( $source, $destination );
         $messages[] = "✓ $message";
+    }
+
+    private function replace_asset_directory( string $source, string $destination, array &$messages, string $message ): void {
+        if ( is_dir( $destination ) && ! is_file( $destination . DIRECTORY_SEPARATOR . StaticAppImporter::ASSET_MARKER_FILE ) ) {
+            throw new \RuntimeException(
+                "Refusing to replace existing directory: $destination\n" .
+                'Set WP_APP_FRONTEND_ASSET_DIR to an unused directory, or remove the directory if it is old generated output.'
+            );
+        }
+
+        $this->replace_directory( $source, $destination, $messages, $message );
     }
 
     private function merge_composer_json( string $source, string $destination, array $config, array &$messages ): void {

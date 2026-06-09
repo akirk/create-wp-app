@@ -32,5 +32,5 @@ Use these rules when creating or modifying a WpApp plugin scaffold.
 - Do not treat obvious bundler development entries such as `/src/main.jsx` or templates with `%PUBLIC_URL%` as deployable root HTML.
 - For Create React App, ensure `"homepage": "."` or `PUBLIC_URL=.` before building so generated chunk paths remain portable.
 - When a converted app uses client-side routing, prefer hash routing or configure the router basename to match the WpApp URL path.
-- Keep imported static assets in a dedicated plugin directory such as `app/`; let `templates/index.php` call `wp_app_head()`, `wp_app_body_open()`, and `wp_app_body_close()`.
+- Keep imported static assets in a dedicated plugin directory such as `app/` for fresh scaffolds or `wp-app/` when augmenting an existing frontend app; let `templates/index.php` call `wp_app_head()`, `wp_app_body_open()`, and `wp_app_body_close()`.
 - When augmenting an existing frontend app in place, preserve frontend `src/`, `package.json`, and `README.md`; add only the WordPress plugin layer and merge Composer metadata.
