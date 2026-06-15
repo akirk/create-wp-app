@@ -188,9 +188,11 @@ add_action( 'plugins_loaded', function() {
         // 'add_app_node'                 => false,
 
         // App identity
-        // 'app_name'     => '{{plugin-name}}',
-        // 'my_apps'      => true,
-        // 'my_apps_icon' => null,
+        // $plugin_data = get_file_data( __FILE__, [ 'name' => 'Plugin Name' ] );
+        // 'app_name'            => $plugin_data['name'],
+        // 'app_name_textdomain' => '{{slug}}',
+        // 'my_apps'             => true,
+        // 'my_apps_icon'        => null,
     ] );
     $app->init();
 } );

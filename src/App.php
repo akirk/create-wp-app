@@ -23,9 +23,10 @@ class App extends BaseApp {
             // 'add_app_node'                 => false,
 
             // App identity
-            // 'app_name'     => '{{plugin-name}}',
-            // 'my_apps'      => true,
-            // 'my_apps_icon' => null,
+            // 'app_name'            => $this->get_plugin_name(),
+            // 'app_name_textdomain' => '{{slug}}',
+            // 'my_apps'             => true,
+            // 'my_apps_icon'        => null,
         ] );
 
         // Uncomment only when these extension points contain real code.
@@ -44,6 +45,16 @@ class App extends BaseApp {
 
     protected function get_template_dir(): string {
         return dirname( __DIR__ ) . '/templates';
+    }
+
+    protected function get_plugin_name(): string {
+        if ( ! function_exists( 'get_file_data' ) ) {
+            return '{{plugin-name}}';
+        }
+
+        $plugin_data = get_file_data( dirname( __DIR__ ) . '/{{slug}}.php', [ 'name' => 'Plugin Name' ] );
+
+        return $plugin_data['name'] ?: '{{plugin-name}}';
     }
 
     protected function setup_storage(): void {
