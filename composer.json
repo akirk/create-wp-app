@@ -15,6 +15,10 @@
     },
     "archive": {
         "exclude": [
+            "/.agents",
+            "/.codex",
+            "/.github",
+            "/docs",
             "/examples",
             "/skills"
         ]
