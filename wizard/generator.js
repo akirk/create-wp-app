@@ -1,11 +1,11 @@
 (function() {
     const form = document.getElementById('generator-form');
     const status = document.getElementById('status');
-    const fileList = document.getElementById('file-list');
     const pluginNameInput = document.getElementById('plugin-name');
     const slugInput = document.getElementById('slug');
     const namespaceInput = document.getElementById('namespace');
     const urlPathInput = document.getElementById('url-path');
+    const downloadButton = document.getElementById('download-button');
 
     let slugEdited = false;
     let namespaceEdited = false;
@@ -518,19 +518,6 @@ register_deactivation_hook( __FILE__, function() {
         }
     }
 
-    function renderFileList() {
-        const config = getConfig();
-        const files = Array.from(buildFiles(config).keys());
-        fileList.innerHTML = '';
-        files.forEach((file) => {
-            const item = document.createElement('li');
-            const code = document.createElement('code');
-            code.textContent = file.replace(`${config.slug}/`, '');
-            item.append(code);
-            fileList.append(item);
-        });
-    }
-
     function syncDerivedFields() {
         const pluginName = pluginNameInput.value;
         const slug = slugify(pluginName);
@@ -547,7 +534,6 @@ register_deactivation_hook( __FILE__, function() {
             urlPathInput.value = slug;
         }
 
-        renderFileList();
     }
 
     slugInput.addEventListener('input', () => {
@@ -555,24 +541,23 @@ register_deactivation_hook( __FILE__, function() {
         if (!urlPathEdited) {
             urlPathInput.value = slugify(slugInput.value);
         }
-        renderFileList();
     });
 
     namespaceInput.addEventListener('input', () => {
         namespaceEdited = true;
-        renderFileList();
     });
 
     urlPathInput.addEventListener('input', () => {
         urlPathEdited = true;
-        renderFileList();
     });
 
     pluginNameInput.addEventListener('input', syncDerivedFields);
-    form.addEventListener('input', renderFileList);
 
-    form.addEventListener('submit', async (event) => {
-        event.preventDefault();
+    async function downloadZip() {
+        if (!form.reportValidity()) {
+            return;
+        }
+
         status.classList.remove('error');
         status.textContent = '';
 
@@ -608,7 +593,13 @@ register_deactivation_hook( __FILE__, function() {
             status.classList.add('error');
             status.textContent = error.message;
         }
+    }
+
+    form.addEventListener('submit', (event) => {
+        event.preventDefault();
     });
+
+    downloadButton.addEventListener('click', downloadZip);
 
     syncDerivedFields();
 })();

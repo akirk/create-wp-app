@@ -235,25 +235,21 @@
             font-size: 1.1rem;
         }
 
-        .file-list {
+        .steps {
             display: grid;
             gap: 8px;
             margin: 0;
-            padding: 0;
-            list-style: none;
+            padding-left: 20px;
         }
 
-        .file-list li {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
+        .steps li {
             padding: 9px 0;
             border-bottom: 1px solid var(--line);
             color: var(--muted);
-            font-size: 0.9rem;
+            font-size: 0.95rem;
         }
 
-        .file-list li:last-child {
+        .steps li:last-child {
             border-bottom: 0;
         }
 
@@ -300,7 +296,7 @@
                         <legend>Plugin</legend>
                         <div class="field">
                             <label for="plugin-name">Plugin name</label>
-                            <input id="plugin-name" name="pluginName" type="text" value="My App" autocomplete="off" required>
+                            <input id="plugin-name" name="pluginName" type="text" placeholder="My App" autocomplete="off" required>
                         </div>
                         <div class="field">
                             <label for="slug">Slug</label>
@@ -338,15 +334,20 @@
                     </fieldset>
 
                     <div class="actions">
-                        <button type="submit">Download zip</button>
+                        <button id="download-button" type="button">Download zip</button>
                         <output id="status" class="status" aria-live="polite"></output>
                     </div>
                 </form>
             </section>
 
             <aside class="panel">
-                <h2>Zip Contents</h2>
-                <ul class="file-list" id="file-list"></ul>
+                <h2>After Download</h2>
+                <ol class="steps">
+                    <li>Extract the zip file.</li>
+                    <li>Move the plugin folder into <code>wp-content/plugins/</code>.</li>
+                    <li>Activate the plugin in WordPress.</li>
+                    <li>Open the configured URL path.</li>
+                </ol>
                 <div class="notes">
                     WpApp runtime files are bundled into the Pages artifact and added to your zip with a Composer-lite autoloader.
                 </div>
