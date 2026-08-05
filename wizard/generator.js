@@ -546,13 +546,11 @@ register_deactivation_hook( __FILE__, function() {
     function buildPlaygroundPhp(config) {
         const filesPayload = toBase64(JSON.stringify(getRelativeFiles(config)));
         const configPayload = toBase64(JSON.stringify(config));
-        const wpAppZipUrl = new URL('assets/wp-app.zip', window.location.href).href;
 
         return `<?php require_once '/wordpress/wp-load.php';
 
 $config = json_decode( base64_decode( ${JSON.stringify(configPayload)} ), true );
 $files = json_decode( base64_decode( ${JSON.stringify(filesPayload)} ), true );
-$wp_app_zip_url = ${JSON.stringify(wpAppZipUrl)};
 $target_dir = WP_CONTENT_DIR . '/plugins/' . $config['slug'];
 
 $remove_directory = static function( string $directory ) use ( &$remove_directory ): void {
@@ -597,39 +595,6 @@ foreach ( $files as $relative_path => $content ) {
     file_put_contents( $path, $content );
 }
 
-$response = wp_remote_get( $wp_app_zip_url, [ 'timeout' => 60 ] );
-if ( is_wp_error( $response ) ) {
-    throw new RuntimeException( $response->get_error_message() );
-}
-
-$zip_body = wp_remote_retrieve_body( $response );
-if ( $zip_body === '' ) {
-    throw new RuntimeException( 'Downloaded WpApp bundle was empty.' );
-}
-
-$tmp_zip = tempnam( sys_get_temp_dir(), 'wp-app-' );
-file_put_contents( $tmp_zip, $zip_body );
-
-$wp_app_dir = $target_dir . '/vendor/akirk/wp-app';
-$ensure_directory( $wp_app_dir );
-
-if ( class_exists( 'ZipArchive' ) ) {
-    $zip = new ZipArchive();
-    if ( true !== $zip->open( $tmp_zip ) ) {
-        throw new RuntimeException( 'Could not open WpApp bundle.' );
-    }
-    $zip->extractTo( $wp_app_dir );
-    $zip->close();
-} else {
-    require_once ABSPATH . 'wp-admin/includes/file.php';
-    WP_Filesystem();
-    $unzipped = unzip_file( $tmp_zip, $wp_app_dir );
-    if ( is_wp_error( $unzipped ) ) {
-        throw new RuntimeException( $unzipped->get_error_message() );
-    }
-}
-
-unlink( $tmp_zip );
 flush_rewrite_rules();
 `;
     }
@@ -662,6 +627,15 @@ flush_rewrite_rules();
             {
                 step: 'runPHP',
                 code: buildPlaygroundPhp(config)
+            },
+            {
+                step: 'writeFiles',
+                writeToPath: `/wordpress/wp-content/plugins/${config.slug}/vendor/akirk/wp-app`,
+                filesTree: {
+                    resource: 'git:directory',
+                    url: 'https://github.com/akirk/wp-app',
+                    ref: 'refs/heads/main'
+                }
             },
             {
                 step: 'activatePlugin',
