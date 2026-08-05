@@ -18,9 +18,9 @@
             "/.agents",
             "/.codex",
             "/.github",
-            "/docs",
             "/examples",
-            "/skills"
+            "/skills",
+            "/wizard"
         ]
     },
     "scripts": {
