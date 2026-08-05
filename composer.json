@@ -15,8 +15,12 @@
     },
     "archive": {
         "exclude": [
+            "/.agents",
+            "/.codex",
+            "/.github",
             "/examples",
-            "/skills"
+            "/skills",
+            "/wizard"
         ]
     },
     "scripts": {

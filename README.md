@@ -8,6 +8,11 @@ Scaffold a WordPress plugin powered by [WpApp](https://github.com/akirk/wp-app).
 composer create-project akirk/create-wp-app my-plugin
 ```
 
+You can also use the static GitHub Pages generator to download a scaffolded zip
+with WpApp bundled in `vendor/`:
+
+https://akirk.github.io/create-wp-app/
+
 This prompts you for:
 
 - **Plugin name** — Display name for your plugin
