@@ -7,6 +7,7 @@
     const urlPathInput = document.getElementById('url-path');
     const downloadButton = document.getElementById('download-button');
     const playgroundButton = document.getElementById('playground-button');
+    const aiAssistantPluginUrl = 'https://github.com/akirk/ai-assistant/archive/refs/heads/main.zip';
 
     let slugEdited = false;
     let namespaceEdited = false;
@@ -452,6 +453,7 @@ register_deactivation_hook( __FILE__, function() {
             author: String(formData.get('author') || '').trim(),
             urlPath: normalizeUrlPath(String(formData.get('urlPath') || slug), slug),
             setupType: String(formData.get('setupType') || 'full'),
+            installAiAssistant: formData.get('installAiAssistant') === '1',
             identifier: toIdentifier(slug)
         };
     }
@@ -634,6 +636,39 @@ flush_rewrite_rules();
     }
 
     function buildPlaygroundBlueprint(config) {
+        const steps = [
+            {
+                step: 'login',
+                username: 'admin',
+                password: 'password'
+            }
+        ];
+
+        if (config.installAiAssistant) {
+            steps.push({
+                step: 'installPlugin',
+                pluginData: {
+                    resource: 'url',
+                    url: aiAssistantPluginUrl
+                },
+                options: {
+                    activate: true
+                }
+            });
+        }
+
+        steps.push(
+            {
+                step: 'runPHP',
+                code: buildPlaygroundPhp(config)
+            },
+            {
+                step: 'activatePlugin',
+                pluginName: config.pluginName,
+                pluginPath: `${config.slug}/${config.slug}.php`
+            }
+        );
+
         return {
             $schema: 'https://playground.wordpress.net/blueprint-schema.json',
             landingPage: `/${config.urlPath}/`,
@@ -644,22 +679,7 @@ flush_rewrite_rules();
             features: {
                 networking: true
             },
-            steps: [
-                {
-                    step: 'login',
-                    username: 'admin',
-                    password: 'password'
-                },
-                {
-                    step: 'runPHP',
-                    code: buildPlaygroundPhp(config)
-                },
-                {
-                    step: 'activatePlugin',
-                    pluginName: config.pluginName,
-                    pluginPath: `${config.slug}/${config.slug}.php`
-                }
-            ]
+            steps
         };
     }
 

@@ -199,6 +199,24 @@
             padding-top: 4px;
         }
 
+        .checkbox {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            color: var(--muted);
+            font-size: 0.88rem;
+            font-weight: 500;
+            min-height: 46px;
+            white-space: nowrap;
+        }
+
+        .checkbox input {
+            width: 15px;
+            height: 15px;
+            margin: 0;
+            accent-color: var(--accent);
+        }
+
         button {
             min-height: 46px;
             padding: 0 18px;
@@ -346,6 +364,10 @@
                     <div class="actions">
                         <button id="download-button" type="button">Download zip</button>
                         <button id="playground-button" class="secondary" type="button">Run in Playground</button>
+                        <label class="checkbox" for="install-ai-assistant">
+                            <input id="install-ai-assistant" name="installAiAssistant" type="checkbox" value="1">
+                            AI Assistant
+                        </label>
                         <output id="status" class="status" aria-live="polite"></output>
                     </div>
                 </form>
