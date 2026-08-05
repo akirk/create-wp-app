@@ -20,23 +20,6 @@
         }
     };
 
-    const wpAppSourceBase = 'https://raw.githubusercontent.com/akirk/wp-app/main/';
-    const wpAppRuntimeFiles = [
-        'LICENSE',
-        'src/functions.php',
-        'src/templates/403.php',
-        'src/templates/404.php',
-        'src/class-settings.php',
-        'src/BaseStorage.php',
-        'src/class-masterbar.php',
-        'src/class-router.php',
-        'src/class-wpapp.php',
-        'src/abstract-baseapp.php',
-        'src/class-registry.php',
-        'composer.json',
-        'README.md'
-    ];
-
     const autoloadPolyfill = `<?php
 
 return ( static function(): bool {
@@ -518,19 +501,20 @@ register_deactivation_hook( __FILE__, function() {
     }
 
     async function addBundledWpApp(zip, config) {
-        const responses = await Promise.all(
-            wpAppRuntimeFiles.map(async (file) => {
-                const response = await fetch(`${wpAppSourceBase}${file}`);
-                if (!response.ok) {
-                    throw new Error(`Could not download WpApp file: ${file}`);
-                }
+        const response = await fetch('assets/wp-app.zip');
+        if (!response.ok) {
+            throw new Error('Bundled WpApp asset is missing. Build the Pages artifact before previewing downloads locally.');
+        }
 
-                return [file, await response.arrayBuffer()];
-            })
-        );
+        const dependencyZip = await window.JSZip.loadAsync(await response.arrayBuffer());
+        const entries = Object.values(dependencyZip.files);
 
-        for (const [file, content] of responses) {
-            zip.file(`${config.slug}/vendor/akirk/wp-app/${file}`, content);
+        for (const entry of entries) {
+            if (entry.dir) {
+                continue;
+            }
+
+            zip.file(`${config.slug}/vendor/akirk/wp-app/${entry.name}`, await entry.async('uint8array'));
         }
     }
 
@@ -607,7 +591,7 @@ register_deactivation_hook( __FILE__, function() {
         }
 
         try {
-            status.textContent = 'Downloading WpApp from GitHub...';
+            status.textContent = 'Adding bundled WpApp...';
             await addBundledWpApp(zip, config);
             status.textContent = 'Building zip...';
             const blob = await zip.generateAsync({ type: 'blob' });

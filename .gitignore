@@ -1,3 +1,4 @@
 /vendor/
 composer.lock
 my-playground-app/
+wizard/assets/*.zip
