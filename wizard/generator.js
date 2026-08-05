@@ -519,15 +519,15 @@ register_deactivation_hook( __FILE__, function() {
     }
 
     function syncDerivedFields() {
-        const pluginName = pluginNameInput.value;
-        const slug = slugify(pluginName);
+        const pluginName = pluginNameInput.value.trim();
+        const slug = pluginName ? slugify(pluginName) : '';
 
         if (!slugEdited) {
             slugInput.value = slug;
         }
 
         if (!namespaceEdited) {
-            namespaceInput.value = toNamespace(pluginName);
+            namespaceInput.value = pluginName ? toNamespace(pluginName) : '';
         }
 
         if (!urlPathEdited) {
