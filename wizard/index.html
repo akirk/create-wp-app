@@ -43,18 +43,11 @@
             padding: 32px 0;
         }
 
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 24px;
-            margin-bottom: 28px;
-        }
-
         .brand {
             display: flex;
             flex-direction: column;
             gap: 4px;
+            margin-bottom: 28px;
         }
 
         .brand h1 {
@@ -69,20 +62,6 @@
             margin: 0;
             color: var(--muted);
             font-size: 1.05rem;
-        }
-
-        .repo-link {
-            display: inline-flex;
-            align-items: center;
-            min-height: 40px;
-            padding: 0 14px;
-            border: 1px solid var(--line);
-            border-radius: 6px;
-            background: var(--surface);
-            color: var(--text);
-            font-weight: 650;
-            text-decoration: none;
-            white-space: nowrap;
         }
 
         .layout {
@@ -199,6 +178,24 @@
             padding-top: 4px;
         }
 
+        .checkbox {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            color: var(--muted);
+            font-size: 0.88rem;
+            font-weight: 500;
+            min-height: 46px;
+            white-space: nowrap;
+        }
+
+        .checkbox input {
+            width: 15px;
+            height: 15px;
+            margin: 0;
+            accent-color: var(--accent);
+        }
+
         button {
             min-height: 46px;
             padding: 0 18px;
@@ -278,11 +275,6 @@
         }
 
         @media (max-width: 820px) {
-            header {
-                align-items: flex-start;
-                flex-direction: column;
-            }
-
             .layout {
                 grid-template-columns: 1fr;
             }
@@ -294,9 +286,8 @@
         <header>
             <div class="brand">
                 <h1>Create a WpApp</h1>
-                <p>Generate a WordPress plugin scaffold powered by WpApp and download it as a zip.</p>
+                <p>Generate a WordPress plugin scaffold powered by <a href="https://github.com/akirk/wp-app">WpApp</a>, then download it or run it in WordPress Playground.</p>
             </div>
-            <a class="repo-link" href="https://github.com/akirk/wp-app">WpApp</a>
         </header>
 
         <main class="layout">
@@ -346,6 +337,10 @@
                     <div class="actions">
                         <button id="download-button" type="button">Download zip</button>
                         <button id="playground-button" class="secondary" type="button">Run in Playground</button>
+                        <label class="checkbox" for="install-ai-assistant">
+                            <input id="install-ai-assistant" name="installAiAssistant" type="checkbox" value="1">
+                            AI Assistant
+                        </label>
                         <output id="status" class="status" aria-live="polite"></output>
                     </div>
                 </form>
