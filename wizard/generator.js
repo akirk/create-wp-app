@@ -6,6 +6,7 @@
     const namespaceInput = document.getElementById('namespace');
     const urlPathInput = document.getElementById('url-path');
     const downloadButton = document.getElementById('download-button');
+    const playgroundButton = document.getElementById('playground-button');
 
     let slugEdited = false;
     let namespaceEdited = false;
@@ -518,16 +519,160 @@ register_deactivation_hook( __FILE__, function() {
         }
     }
 
+    function getRelativeFiles(config) {
+        const prefix = `${config.slug}/`;
+        const files = {};
+
+        for (const [path, content] of buildFiles(config)) {
+            files[path.startsWith(prefix) ? path.slice(prefix.length) : path] = content;
+        }
+
+        return files;
+    }
+
+    function toBase64(value) {
+        const bytes = new TextEncoder().encode(value);
+        let binary = '';
+        const chunkSize = 0x8000;
+
+        for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+            binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+        }
+
+        return btoa(binary);
+    }
+
+    function buildPlaygroundPhp(config) {
+        const filesPayload = toBase64(JSON.stringify(getRelativeFiles(config)));
+        const configPayload = toBase64(JSON.stringify(config));
+        const wpAppZipUrl = new URL('assets/wp-app.zip', window.location.href).href;
+
+        return `<?php require_once '/wordpress/wp-load.php';
+
+$config = json_decode( base64_decode( ${JSON.stringify(configPayload)} ), true );
+$files = json_decode( base64_decode( ${JSON.stringify(filesPayload)} ), true );
+$wp_app_zip_url = ${JSON.stringify(wpAppZipUrl)};
+$target_dir = WP_CONTENT_DIR . '/plugins/' . $config['slug'];
+
+$remove_directory = static function( string $directory ) use ( &$remove_directory ): void {
+    if ( ! is_dir( $directory ) ) {
+        return;
+    }
+
+    foreach ( scandir( $directory ) as $entry ) {
+        if ( $entry === '.' || $entry === '..' ) {
+            continue;
+        }
+
+        $path = $directory . '/' . $entry;
+        if ( is_dir( $path ) && ! is_link( $path ) ) {
+            $remove_directory( $path );
+            continue;
+        }
+
+        unlink( $path );
+    }
+
+    rmdir( $directory );
+};
+
+$ensure_directory = static function( string $directory ): void {
+    if ( ! is_dir( $directory ) && ! mkdir( $directory, 0777, true ) && ! is_dir( $directory ) ) {
+        throw new RuntimeException( 'Could not create directory: ' . $directory );
+    }
+};
+
+$remove_directory( $target_dir );
+$ensure_directory( $target_dir );
+
+foreach ( $files as $relative_path => $content ) {
+    $relative_path = ltrim( str_replace( '\\\\', '/', $relative_path ), '/' );
+    if ( strpos( $relative_path, '..' ) !== false ) {
+        throw new RuntimeException( 'Invalid scaffold path: ' . $relative_path );
+    }
+
+    $path = $target_dir . '/' . $relative_path;
+    $ensure_directory( dirname( $path ) );
+    file_put_contents( $path, $content );
+}
+
+$response = wp_remote_get( $wp_app_zip_url, [ 'timeout' => 60 ] );
+if ( is_wp_error( $response ) ) {
+    throw new RuntimeException( $response->get_error_message() );
+}
+
+$zip_body = wp_remote_retrieve_body( $response );
+if ( $zip_body === '' ) {
+    throw new RuntimeException( 'Downloaded WpApp bundle was empty.' );
+}
+
+$tmp_zip = tempnam( sys_get_temp_dir(), 'wp-app-' );
+file_put_contents( $tmp_zip, $zip_body );
+
+$wp_app_dir = $target_dir . '/vendor/akirk/wp-app';
+$ensure_directory( $wp_app_dir );
+
+if ( class_exists( 'ZipArchive' ) ) {
+    $zip = new ZipArchive();
+    if ( true !== $zip->open( $tmp_zip ) ) {
+        throw new RuntimeException( 'Could not open WpApp bundle.' );
+    }
+    $zip->extractTo( $wp_app_dir );
+    $zip->close();
+} else {
+    require_once ABSPATH . 'wp-admin/includes/file.php';
+    WP_Filesystem();
+    $unzipped = unzip_file( $tmp_zip, $wp_app_dir );
+    if ( is_wp_error( $unzipped ) ) {
+        throw new RuntimeException( $unzipped->get_error_message() );
+    }
+}
+
+unlink( $tmp_zip );
+flush_rewrite_rules();
+`;
+    }
+
+    function buildPlaygroundBlueprint(config) {
+        return {
+            $schema: 'https://playground.wordpress.net/blueprint-schema.json',
+            landingPage: `/${config.urlPath}/`,
+            preferredVersions: {
+                php: '8.3',
+                wp: 'latest'
+            },
+            features: {
+                networking: true
+            },
+            steps: [
+                {
+                    step: 'login',
+                    username: 'admin',
+                    password: 'password'
+                },
+                {
+                    step: 'runPHP',
+                    code: buildPlaygroundPhp(config)
+                },
+                {
+                    step: 'activatePlugin',
+                    pluginName: config.pluginName,
+                    pluginPath: `${config.slug}/${config.slug}.php`
+                }
+            ]
+        };
+    }
+
     function syncDerivedFields() {
-        const pluginName = pluginNameInput.value;
-        const slug = slugify(pluginName);
+        const pluginName = pluginNameInput.value.trim();
+        const slug = pluginName ? slugify(pluginName) : '';
 
         if (!slugEdited) {
             slugInput.value = slug;
         }
 
         if (!namespaceEdited) {
-            namespaceInput.value = toNamespace(pluginName);
+            namespaceInput.value = pluginName ? toNamespace(pluginName) : '';
         }
 
         if (!urlPathEdited) {
@@ -595,11 +740,38 @@ register_deactivation_hook( __FILE__, function() {
         }
     }
 
+    function runInPlayground() {
+        if (!form.reportValidity()) {
+            return;
+        }
+
+        const config = getConfig();
+        const blueprint = buildPlaygroundBlueprint(config);
+        const url = `https://playground.wordpress.net/#${toBase64(JSON.stringify(blueprint))}`;
+        const playgroundWindow = window.open(url, '_blank', 'noopener');
+
+        if (playgroundWindow) {
+            status.classList.remove('error');
+            status.textContent = 'Opening WordPress Playground...';
+            return;
+        }
+
+        status.classList.add('error');
+        status.innerHTML = '';
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.textContent = 'Open WordPress Playground';
+        status.append('Pop-up blocked. ', link);
+    }
+
     form.addEventListener('submit', (event) => {
         event.preventDefault();
     });
 
     downloadButton.addEventListener('click', downloadZip);
+    playgroundButton.addEventListener('click', runInPlayground);
 
     syncDerivedFields();
 })();

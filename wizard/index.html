@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>create-wp-app</title>
+    <title>Create a WpApp</title>
     <script src="assets/jszip.min.js" defer></script>
     <script src="generator.js" defer></script>
     <style>
@@ -216,6 +216,16 @@
             background: var(--accent-strong);
         }
 
+        button.secondary {
+            background: var(--surface);
+            color: var(--accent-strong);
+        }
+
+        button.secondary:hover,
+        button.secondary:focus-visible {
+            background: var(--surface-alt);
+        }
+
         .status {
             min-height: 24px;
             color: var(--muted);
@@ -283,10 +293,10 @@
     <div class="shell">
         <header>
             <div class="brand">
-                <h1>create-wp-app</h1>
+                <h1>Create a WpApp</h1>
                 <p>Generate a WordPress plugin scaffold powered by WpApp and download it as a zip.</p>
             </div>
-            <a class="repo-link" href="https://github.com/akirk/create-wp-app">GitHub</a>
+            <a class="repo-link" href="https://github.com/akirk/wp-app">WpApp</a>
         </header>
 
         <main class="layout">
@@ -300,12 +310,12 @@
                         </div>
                         <div class="field">
                             <label for="slug">Slug</label>
-                            <input id="slug" name="slug" type="text" value="my-app" autocomplete="off" required>
+                            <input id="slug" name="slug" type="text" placeholder="my-app" autocomplete="off" required>
                             <p class="hint">Used for the folder, main plugin file, text domain, and Composer package.</p>
                         </div>
                         <div class="field">
                             <label for="namespace">Namespace</label>
-                            <input id="namespace" name="namespace" type="text" value="MyApp" autocomplete="off" required>
+                            <input id="namespace" name="namespace" type="text" placeholder="MyApp" autocomplete="off" required>
                         </div>
                         <div class="field">
                             <label for="author">Author</label>
@@ -313,7 +323,7 @@
                         </div>
                         <div class="field">
                             <label for="url-path">URL path</label>
-                            <input id="url-path" name="urlPath" type="text" value="my-app" autocomplete="off" required>
+                            <input id="url-path" name="urlPath" type="text" placeholder="my-app" autocomplete="off" required>
                         </div>
                     </fieldset>
 
@@ -335,6 +345,7 @@
 
                     <div class="actions">
                         <button id="download-button" type="button">Download zip</button>
+                        <button id="playground-button" class="secondary" type="button">Run in Playground</button>
                         <output id="status" class="status" aria-live="polite"></output>
                     </div>
                 </form>
