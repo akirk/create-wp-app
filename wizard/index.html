@@ -216,6 +216,16 @@
             background: var(--accent-strong);
         }
 
+        button.secondary {
+            background: var(--surface);
+            color: var(--accent-strong);
+        }
+
+        button.secondary:hover,
+        button.secondary:focus-visible {
+            background: var(--surface-alt);
+        }
+
         .status {
             min-height: 24px;
             color: var(--muted);
@@ -335,6 +345,7 @@
 
                     <div class="actions">
                         <button id="download-button" type="button">Download zip</button>
+                        <button id="playground-button" class="secondary" type="button">Run in Playground</button>
                         <output id="status" class="status" aria-live="polite"></output>
                     </div>
                 </form>
