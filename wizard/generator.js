@@ -7,7 +7,6 @@
     const urlPathInput = document.getElementById('url-path');
     const downloadButton = document.getElementById('download-button');
     const playgroundButton = document.getElementById('playground-button');
-    const aiAssistantPluginUrl = 'https://github.com/akirk/ai-assistant/archive/refs/heads/main.zip';
 
     let slugEdited = false;
     let namespaceEdited = false;
@@ -648,11 +647,13 @@ flush_rewrite_rules();
             steps.push({
                 step: 'installPlugin',
                 pluginData: {
-                    resource: 'url',
-                    url: aiAssistantPluginUrl
+                    resource: 'git:directory',
+                    url: 'https://github.com/akirk/ai-assistant',
+                    ref: 'refs/heads/main'
                 },
                 options: {
-                    activate: true
+                    activate: true,
+                    targetFolderName: 'ai-assistant'
                 }
             });
         }
