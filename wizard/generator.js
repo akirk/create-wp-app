@@ -703,8 +703,12 @@ register_deactivation_hook( __FILE__, function() {
         }
     }
 
+    // Enter in the name fields acts like Next; later steps have no submit.
     form.addEventListener('submit', (event) => {
         event.preventDefault();
+        if (currentStep === 1) {
+            goToStep(2);
+        }
     });
 
     /* ---------- steps ---------- */
@@ -749,7 +753,6 @@ register_deactivation_hook( __FILE__, function() {
         button.addEventListener('click', () => goToStep(Number(button.dataset.step)));
     }
 
-    document.getElementById('next-button').addEventListener('click', () => goToStep(2));
 
     // Navigating away from the result hides a running Playground.
     document.addEventListener('wizard:step', (event) => {
