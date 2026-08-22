@@ -113,7 +113,8 @@
             font-weight: 700;
         }
 
-        input[type="text"] {
+        input[type="text"],
+        input[type="password"] {
             width: 100%;
             min-height: 44px;
             padding: 0 12px;
@@ -124,7 +125,8 @@
             font: inherit;
         }
 
-        input[type="text"]:focus {
+        input[type="text"]:focus,
+        input[type="password"]:focus {
             outline: 3px solid rgba(29, 107, 82, 0.18);
             border-color: var(--accent);
         }
@@ -389,7 +391,8 @@
             gap: 8px;
         }
 
-        .field-inline input {
+        .field-inline input,
+        .field-inline select {
             flex: 1;
         }
 
@@ -743,8 +746,7 @@
                         <div class="field">
                             <label for="ai-model">Model</label>
                             <div class="field-inline">
-                                <input id="ai-model" name="aiModel" type="text" list="ai-model-list" autocomplete="off" placeholder="Check the connection to list models">
-                                <datalist id="ai-model-list"></datalist>
+                                <select id="ai-model" name="aiModel"></select>
                                 <button id="ai-check-button" type="button" class="secondary">Check connection</button>
                             </div>
                             <p id="ai-connection" class="ai-connection" aria-live="polite"></p>
