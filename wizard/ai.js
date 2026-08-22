@@ -15,8 +15,7 @@
     const pluginNameInput = document.getElementById('plugin-name');
     const providerSelect = document.getElementById('ai-provider');
     const endpointInput = document.getElementById('ai-endpoint');
-    const modelInput = document.getElementById('ai-model');
-    const modelList = document.getElementById('ai-model-list');
+    const modelSelect = document.getElementById('ai-model');
     const apiKeyInput = document.getElementById('ai-api-key');
     const checkButton = document.getElementById('ai-check-button');
     const connectionStatus = document.getElementById('ai-connection');
@@ -74,6 +73,22 @@
         }
     };
 
+    // Fills the model dropdown; keeps `selected` if it is in the list, else
+    // falls back to the provider default or the first entry.
+    function setModelOptions(models, selected) {
+        modelSelect.replaceChildren(...models.map((id) => {
+            const option = document.createElement('option');
+            option.value = id;
+            option.textContent = id;
+            return option;
+        }));
+        if (models.includes(selected)) {
+            modelSelect.value = selected;
+        } else if (models.length) {
+            modelSelect.value = models.includes(providerDef().model) ? providerDef().model : models[0];
+        }
+    }
+
     function providerDef() {
         return PROVIDERS[providerSelect.value];
     }
@@ -119,7 +134,7 @@
         const provider = currentProvider || providerSelect.value;
         settings.provider = providerSelect.value;
         settings[provider] = {
-            model: modelInput.value.trim(),
+            model: modelSelect.value.trim(),
             endpoint: endpointInput.value.trim(),
             apiKey: apiKeyInput.value.trim()
         };
@@ -131,12 +146,12 @@
         currentProvider = provider;
         const saved = loadSettings()[provider] || {};
         const def = PROVIDERS[provider];
-        modelInput.value = saved.model || def.model;
+        const model = saved.model || def.model;
+        setModelOptions(model ? [model] : [], model);
         endpointInput.value = saved.endpoint || def.endpoint;
         apiKeyInput.value = saved.apiKey || '';
         endpointField.hidden = def.needsKey;
         apiKeyField.hidden = !def.needsKey;
-        modelList.replaceChildren();
         setConnection('', '');
         if (!def.needsKey || apiKeyInput.value) {
             checkConnection();
@@ -180,17 +195,10 @@
             if (sequence !== checkSequence) {
                 return;
             }
-            modelList.replaceChildren(...models.map((id) => {
-                const option = document.createElement('option');
-                option.value = id;
-                return option;
-            }));
             if (!models.length) {
                 setConnection(`Connected, but ${def.label} reports no models.`, 'error');
             } else {
-                if (!models.includes(modelInput.value.trim())) {
-                    modelInput.value = models.find((id) => id === def.model) || models[0];
-                }
+                setModelOptions(models, modelSelect.value);
                 setConnection(`Connected. ${models.length} model${models.length === 1 ? '' : 's'} available.`, 'ok');
             }
             saveSettings();
@@ -509,7 +517,7 @@
             signal,
             headers: { 'Content-Type': 'application/json', ...authHeaders() },
             body: JSON.stringify({
-                model: modelInput.value.trim(),
+                model: modelSelect.value.trim(),
                 max_tokens: 64000,
                 stream: true,
                 system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
@@ -592,7 +600,7 @@
             signal,
             headers: { 'Content-Type': 'application/json', ...authHeaders() },
             body: JSON.stringify({
-                model: modelInput.value.trim(),
+                model: modelSelect.value.trim(),
                 stream: true,
                 messages: [{ role: 'system', content: systemPrompt }, ...history],
                 tools: TOOLS.map((tool) => ({
@@ -766,9 +774,9 @@
             window.CreateWpApp.setStatus('Enter an API key first.', true);
             return;
         }
-        if (!modelInput.value.trim()) {
-            modelInput.focus();
-            window.CreateWpApp.setStatus('Choose a model first.', true);
+        if (!modelSelect.value) {
+            modelSelect.focus();
+            window.CreateWpApp.setStatus('Check the connection and choose a model first.', true);
             return;
         }
         if (!form.reportValidity()) {
@@ -860,7 +868,7 @@
         saveSettings();
         checkConnection();
     });
-    modelInput.addEventListener('change', saveSettings);
+    modelSelect.addEventListener('change', saveSettings);
     stopButton.addEventListener('click', () => abortController?.abort());
     promptInput.addEventListener('keydown', (event) => {
         if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
