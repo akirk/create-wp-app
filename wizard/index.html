@@ -550,6 +550,11 @@
             color: #fff;
         }
 
+        .step-note {
+            font-weight: 500;
+            opacity: 0.75;
+        }
+
         .step-number {
             display: inline-grid;
             place-items: center;
@@ -658,8 +663,8 @@
         </header>
 
         <nav class="stepbar" aria-label="Progress">
-            <button type="button" class="step is-current" data-step="1"><span class="step-number">1</span> Plugin</button>
-            <button type="button" class="step" data-step="2" disabled><span class="step-number">2</span> Build with AI</button>
+            <button type="button" class="step is-current" data-step="1"><span class="step-number">1</span> Name your app</button>
+            <button type="button" class="step" data-step="2" disabled><span class="step-number">2</span> Build with AI <span class="step-note">(optional)</span></button>
             <button type="button" class="step" data-step="3" disabled><span class="step-number">3</span> Result</button>
         </nav>
 
@@ -667,7 +672,7 @@
             <form id="generator-form">
                 <section class="panel step-panel" data-step-panel="1">
                     <fieldset>
-                        <legend>Plugin</legend>
+                        <legend>Name your app</legend>
                         <div class="field">
                             <label for="plugin-name">Plugin name</label>
                             <input id="plugin-name" name="pluginName" type="text" placeholder="My App" autocomplete="off" required>
@@ -714,7 +719,7 @@
 
                 <section class="panel step-panel" data-step-panel="2" hidden>
                     <fieldset>
-                        <legend>Build with AI</legend>
+                        <legend>Build with AI <span class="step-note">(optional)</span></legend>
                         <p class="intro">Optional. Describe what the app should do and a model will write it on top of the scaffold, using file tools, right here in your browser. Or skip this and take the plain scaffold.</p>
                         <div class="field-row">
                             <div class="field">
