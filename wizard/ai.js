@@ -714,6 +714,7 @@
             }
             renderFiles();
             window.CreateWpApp.setGeneratedFiles(files, config.slug);
+            downloadButton.title = `Snapshot after ${iteration + 1} round${iteration ? 's' : ''} of changes`;
 
             const resultMessages = toolResults(results);
             messages.push(...(Array.isArray(resultMessages) ? resultMessages : [resultMessages]));
@@ -803,13 +804,16 @@
     // Lock everything that must not change mid-run and show progress.
     function setGenerating(active) {
         setBusy(active ? 'Starting…' : '');
+        if (!active) {
+            downloadButton.title = '';
+        }
         generateButton.disabled = active;
         generateButton.classList.toggle('is-busy', active);
         generateButton.textContent = active ? 'Generating…' : 'Generate with AI';
         stopButton.hidden = !active;
         followupButton.hidden = active;
         followupInput.disabled = active;
-        downloadButton.disabled = active;
+        // The zip can be downloaded at any time; it reflects the files so far.
         playgroundButton.disabled = active;
         for (const button of document.querySelectorAll('.stepbar .step, .back-button')) {
             button.disabled = active || button.disabled;
