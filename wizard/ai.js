@@ -7,8 +7,12 @@
     const MAX_ITERATIONS = 60;
 
     const promptInput = document.getElementById('ai-prompt');
-    const promptLabel = document.querySelector('label[for="ai-prompt"]');
-    const promptPlaceholder = promptInput.placeholder;
+    const followupInput = document.getElementById('ai-followup');
+    const followupButton = document.getElementById('ai-followup-button');
+    const skipButton = document.getElementById('skip-ai-button');
+    const aiResult = document.getElementById('ai-result');
+    const scaffoldResult = document.getElementById('scaffold-result');
+    const pluginNameInput = document.getElementById('plugin-name');
     const providerSelect = document.getElementById('ai-provider');
     const endpointInput = document.getElementById('ai-endpoint');
     const modelInput = document.getElementById('ai-model');
@@ -22,7 +26,6 @@
     const playgroundButton = document.getElementById('playground-button');
     const generateButton = document.getElementById('ai-generate-button');
     const stopButton = document.getElementById('ai-stop-button');
-    const resetButton = document.getElementById('ai-reset-button');
     const logElement = document.getElementById('ai-log');
     const fileList = document.getElementById('ai-files');
     const fileViewer = document.getElementById('ai-file-viewer');
@@ -690,8 +693,7 @@
                     button.textContent = 'Continue';
                     button.addEventListener('click', () => {
                         button.disabled = true;
-                        promptInput.value = 'Continue where you left off.';
-                        generate();
+                        generate('Continue where you left off.');
                     });
                     line.append(button);
                 }
@@ -712,6 +714,7 @@
             }
             renderFiles();
             window.CreateWpApp.setGeneratedFiles(files, config.slug);
+            downloadButton.title = `Snapshot after ${iteration + 1} round${iteration ? 's' : ''} of changes`;
 
             const resultMessages = toolResults(results);
             messages.push(...(Array.isArray(resultMessages) ? resultMessages : [resultMessages]));
@@ -731,14 +734,31 @@
         logElement.replaceChildren();
         fileList.replaceChildren();
         fileViewer.hidden = true;
-        promptLabel.textContent = 'Describe your app';
-        promptInput.placeholder = promptPlaceholder;
     }
 
-    async function generate() {
-        const prompt = promptInput.value.trim();
+    // Shows the result step for the given mode and seeds the file map.
+    function showResult(withAi) {
+        const nextConfig = window.CreateWpApp.getConfig();
+        if (!config || config.slug !== nextConfig.slug || config.setupType !== nextConfig.setupType) {
+            resetConversation();
+        }
+        config = nextConfig;
+        if (!files) {
+            scaffoldFiles = window.CreateWpApp.buildFiles(config);
+            files = new Map(scaffoldFiles);
+            renderFiles();
+        }
+        for (const element of document.querySelectorAll('.result-plugin-name')) {
+            element.textContent = config.pluginName;
+        }
+        aiResult.hidden = !withAi;
+        scaffoldResult.hidden = withAi;
+        window.CreateWpApp.goToStep(3);
+    }
+
+    async function generate(prompt) {
+        prompt = String(prompt || '').trim();
         if (!prompt) {
-            promptInput.focus();
             return;
         }
         if (providerDef().needsKey && !apiKeyInput.value.trim()) {
@@ -756,16 +776,7 @@
         }
 
         saveSettings();
-        const nextConfig = window.CreateWpApp.getConfig();
-        if (!config || config.slug !== nextConfig.slug || config.setupType !== nextConfig.setupType) {
-            resetConversation();
-        }
-        config = nextConfig;
-        if (!files) {
-            scaffoldFiles = window.CreateWpApp.buildFiles(config);
-            files = new Map(scaffoldFiles);
-            renderFiles();
-        }
+        showResult(true);
 
         abortController = new AbortController();
         setGenerating(true);
@@ -773,9 +784,7 @@
 
         try {
             await runAgent(prompt);
-            promptInput.value = '';
-            promptLabel.textContent = 'Follow-up prompt';
-            promptInput.placeholder = 'Refine the app, ask for changes, or say "continue" if it stopped early.';
+            followupInput.value = '';
             appendLog('done', 'Finished. Download the zip or run it in Playground, or send another prompt to refine.');
             window.CreateWpApp.setStatus('');
         } catch (error) {
@@ -795,19 +804,23 @@
     // Lock everything that must not change mid-run and show progress.
     function setGenerating(active) {
         setBusy(active ? 'Starting…' : '');
+        if (!active) {
+            downloadButton.title = '';
+        }
         generateButton.disabled = active;
         generateButton.classList.toggle('is-busy', active);
         generateButton.textContent = active ? 'Generating…' : 'Generate with AI';
         stopButton.hidden = !active;
-        resetButton.disabled = active;
-        downloadButton.disabled = active;
+        followupButton.hidden = active;
+        followupInput.disabled = active;
+        // The zip can be downloaded at any time; it reflects the files so far.
         playgroundButton.disabled = active;
-        for (const field of form.querySelectorAll('input, select, textarea')) {
-            if (field !== promptInput || active) {
-                field.disabled = active;
-            }
+        for (const button of document.querySelectorAll('.stepbar .step, .back-button')) {
+            button.disabled = active || button.disabled;
         }
-        checkButton.disabled = active;
+        if (!active) {
+            window.CreateWpApp.goToStep(3);
+        }
         form.classList.toggle('is-generating', active);
     }
 
@@ -815,7 +828,26 @@
         saveSettings();
         applyProviderSettings();
     });
-    generateButton.addEventListener('click', generate);
+    generateButton.addEventListener('click', () => generate(promptInput.value));
+    followupButton.addEventListener('click', () => generate(followupInput.value));
+    skipButton.addEventListener('click', () => {
+        if (abortController) {
+            return;
+        }
+        showResult(false);
+    });
+
+    // Prefill the prompt from the plugin name until the user edits it.
+    let promptEdited = false;
+    promptInput.addEventListener('input', () => {
+        promptEdited = promptInput.value.trim() !== '';
+    });
+    document.addEventListener('wizard:step', (event) => {
+        if (event.detail.step === 2 && !promptEdited) {
+            const name = pluginNameInput.value.trim();
+            promptInput.value = name ? `Build a ${name} app.` : '';
+        }
+    });
     checkButton.addEventListener('click', () => {
         saveSettings();
         checkConnection();
@@ -830,14 +862,16 @@
     });
     modelInput.addEventListener('change', saveSettings);
     stopButton.addEventListener('click', () => abortController?.abort());
-    resetButton.addEventListener('click', () => {
-        resetConversation();
-        window.CreateWpApp.setStatus('Reset to the plain scaffold.');
-    });
     promptInput.addEventListener('keydown', (event) => {
         if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
             event.preventDefault();
-            generate();
+            generate(promptInput.value);
+        }
+    });
+    followupInput.addEventListener('keydown', (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+            event.preventDefault();
+            generate(followupInput.value);
         }
     });
     document.getElementById('ai-file-viewer-close').addEventListener('click', () => {
