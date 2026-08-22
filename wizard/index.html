@@ -26,6 +26,10 @@
             box-sizing: border-box;
         }
 
+        [hidden] {
+            display: none !important;
+        }
+
         body {
             margin: 0;
             background: var(--bg);
@@ -389,8 +393,143 @@
             box-shadow: var(--shadow);
         }
 
+        .field-inline {
+            display: flex;
+            gap: 8px;
+        }
+
+        .field-inline input {
+            flex: 1;
+        }
+
+        .field-inline button {
+            white-space: nowrap;
+        }
+
+        .ai-connection {
+            min-height: 1.2em;
+            margin: 0;
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
+
+        .ai-connection.ok {
+            color: var(--accent);
+        }
+
+        .ai-connection.error {
+            color: var(--danger);
+        }
+
+        .ai-connection:empty {
+            display: none;
+        }
+
+        button.small {
+            min-height: 30px;
+            padding: 0 10px;
+            margin-left: 6px;
+            font-size: 0.85rem;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: default;
+        }
+
+        form.is-generating input:disabled,
+        form.is-generating select:disabled,
+        form.is-generating textarea:disabled {
+            background: var(--surface-alt);
+            color: var(--muted);
+        }
+
+        .ai-log-done {
+            color: var(--accent);
+            font-weight: 700;
+        }
+
+        .ai-busy {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--accent-strong);
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .ai-busy::before,
+        button.is-busy::before {
+            content: "";
+            width: 14px;
+            height: 14px;
+            border: 2px solid currentColor;
+            border-right-color: transparent;
+            border-radius: 50%;
+            animation: ai-spin 0.8s linear infinite;
+        }
+
+        button.is-busy {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        @keyframes ai-spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .ai-file {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ai-file-badge {
+            padding: 1px 6px;
+            border-radius: 999px;
+            background: var(--surface-alt);
+            color: var(--muted);
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .ai-file.is-new .ai-file-badge {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .ai-file.is-modified .ai-file-badge {
+            background: #e9c46a;
+            color: #3c2f00;
+        }
+
+        .ai-file.is-deleted {
+            text-decoration: line-through;
+            color: var(--muted);
+        }
+
+        .ai-file.is-latest {
+            animation: ai-flash 1.2s ease-out;
+        }
+
+        @keyframes ai-flash {
+            from {
+                background: #dff3e6;
+            }
+        }
+
         @media (max-width: 820px) {
             .layout {
+                grid-template-columns: 1fr;
+            }
+
+            .field-row {
                 grid-template-columns: 1fr;
             }
         }
@@ -462,22 +601,28 @@
                                 <select id="ai-provider" name="aiProvider">
                                     <option value="anthropic">Anthropic</option>
                                     <option value="openai">OpenAI</option>
-                                    <option value="local">Local (Ollama, LM Studio)</option>
+                                    <option value="ollama">Ollama (local)</option>
+                                    <option value="lmstudio">LM Studio (local)</option>
                                 </select>
                             </div>
-                            <div class="field">
-                                <label for="ai-model">Model</label>
-                                <input id="ai-model" name="aiModel" type="text" autocomplete="off">
+                            <div class="field" id="ai-api-key-field">
+                                <label for="ai-api-key">API key</label>
+                                <input id="ai-api-key" name="aiApiKey" type="password" autocomplete="off">
+                            </div>
+                            <div class="field" id="ai-endpoint-field" hidden>
+                                <label for="ai-endpoint">Server URL</label>
+                                <input id="ai-endpoint" name="aiEndpoint" type="text" autocomplete="off">
                             </div>
                         </div>
-                        <div class="field" id="ai-endpoint-field" hidden>
-                            <label for="ai-endpoint">Endpoint</label>
-                            <input id="ai-endpoint" name="aiEndpoint" type="text" autocomplete="off">
-                        </div>
-                        <div class="field" id="ai-api-key-field">
-                            <label for="ai-api-key">API key</label>
-                            <input id="ai-api-key" name="aiApiKey" type="password" autocomplete="off">
-                            <p class="hint"></p>
+                        <div class="field">
+                            <label for="ai-model">Model</label>
+                            <div class="field-inline">
+                                <input id="ai-model" name="aiModel" type="text" list="ai-model-list" autocomplete="off" placeholder="Check the connection to list models">
+                                <datalist id="ai-model-list"></datalist>
+                                <button id="ai-check-button" type="button" class="secondary">Check connection</button>
+                            </div>
+                            <p id="ai-connection" class="ai-connection" aria-live="polite"></p>
+                            <p class="hint">Keys and settings are stored in this browser only; requests go straight to the provider, nothing passes through a server of ours.</p>
                         </div>
                         <div class="actions">
                             <button id="ai-generate-button" type="button">Generate with AI</button>
@@ -485,6 +630,7 @@
                             <button id="ai-reset-button" class="secondary" type="button">Reset</button>
                         </div>
                         <div id="ai-log" class="ai-log" aria-live="polite"></div>
+                        <div id="ai-busy" class="ai-busy" hidden></div>
                     </fieldset>
 
                     <div class="actions">
