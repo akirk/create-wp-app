@@ -7,10 +7,19 @@
     const MAX_ITERATIONS = 60;
 
     const promptInput = document.getElementById('ai-prompt');
+    const promptLabel = document.querySelector('label[for="ai-prompt"]');
+    const promptPlaceholder = promptInput.placeholder;
     const providerSelect = document.getElementById('ai-provider');
     const endpointInput = document.getElementById('ai-endpoint');
     const modelInput = document.getElementById('ai-model');
+    const modelList = document.getElementById('ai-model-list');
     const apiKeyInput = document.getElementById('ai-api-key');
+    const checkButton = document.getElementById('ai-check-button');
+    const connectionStatus = document.getElementById('ai-connection');
+    const form = document.getElementById('generator-form');
+    const busyIndicator = document.getElementById('ai-busy');
+    const downloadButton = document.getElementById('download-button');
+    const playgroundButton = document.getElementById('playground-button');
     const generateButton = document.getElementById('ai-generate-button');
     const stopButton = document.getElementById('ai-stop-button');
     const resetButton = document.getElementById('ai-reset-button');
@@ -22,11 +31,65 @@
     const endpointField = document.getElementById('ai-endpoint-field');
     const apiKeyField = document.getElementById('ai-api-key-field');
 
-    const DEFAULTS = {
-        anthropic: { model: 'claude-opus-5', endpoint: 'https://api.anthropic.com/v1/messages' },
-        openai: { model: 'gpt-5', endpoint: 'https://api.openai.com/v1/chat/completions' },
-        local: { model: 'qwen2.5-coder:14b', endpoint: 'http://localhost:11434/v1/chat/completions' }
+    // `endpoint` is the API base URL. Chat and model-list paths hang off it.
+    const PROVIDERS = {
+        anthropic: {
+            label: 'Anthropic',
+            model: 'claude-opus-5',
+            endpoint: 'https://api.anthropic.com',
+            needsKey: true,
+            chatPath: '/v1/messages',
+            modelsPath: '/v1/models',
+            api: 'anthropic'
+        },
+        openai: {
+            label: 'OpenAI',
+            model: 'gpt-5',
+            endpoint: 'https://api.openai.com',
+            needsKey: true,
+            chatPath: '/v1/chat/completions',
+            modelsPath: '/v1/models',
+            api: 'openai'
+        },
+        ollama: {
+            label: 'Ollama',
+            model: '',
+            endpoint: 'http://localhost:11434',
+            needsKey: false,
+            chatPath: '/v1/chat/completions',
+            modelsPath: '/api/tags',
+            api: 'openai'
+        },
+        lmstudio: {
+            label: 'LM Studio',
+            model: '',
+            endpoint: 'http://127.0.0.1:1234',
+            needsKey: false,
+            chatPath: '/v1/chat/completions',
+            modelsPath: '/v1/models',
+            api: 'openai'
+        }
     };
+
+    function providerDef() {
+        return PROVIDERS[providerSelect.value];
+    }
+
+    function baseUrl() {
+        return (endpointInput.value.trim() || providerDef().endpoint).replace(/\/+$/, '');
+    }
+
+    function authHeaders() {
+        const apiKey = apiKeyInput.value.trim();
+        if (providerDef().api === 'anthropic') {
+            return {
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01',
+                'anthropic-dangerous-direct-browser-access': 'true'
+            };
+        }
+        return apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
+    }
 
     // Conversation state survives across prompts so the user can iterate.
     let files = null;
@@ -64,13 +127,81 @@
         const provider = providerSelect.value;
         currentProvider = provider;
         const saved = loadSettings()[provider] || {};
-        modelInput.value = saved.model || DEFAULTS[provider].model;
-        endpointInput.value = saved.endpoint || DEFAULTS[provider].endpoint;
+        const def = PROVIDERS[provider];
+        modelInput.value = saved.model || def.model;
+        endpointInput.value = saved.endpoint || def.endpoint;
         apiKeyInput.value = saved.apiKey || '';
-        endpointField.hidden = provider === 'anthropic';
-        apiKeyField.querySelector('.hint').textContent = provider === 'local'
-            ? 'Optional. Sent as a Bearer token if your local server requires one.'
-            : 'Stored in this browser only and sent straight to the provider. Nothing goes through a server of ours.';
+        endpointField.hidden = def.needsKey;
+        apiKeyField.hidden = !def.needsKey;
+        modelList.replaceChildren();
+        setConnection('', '');
+        if (!def.needsKey || apiKeyInput.value) {
+            checkConnection();
+        }
+    }
+
+    /* ---------- connection check + model list ---------- */
+
+    function setConnection(text, state) {
+        connectionStatus.textContent = text;
+        connectionStatus.className = `ai-connection ${state}`;
+    }
+
+    async function listModels() {
+        const def = providerDef();
+        const response = await fetch(baseUrl() + def.modelsPath, { headers: authHeaders() });
+        if (!response.ok) {
+            throw await providerError(response);
+        }
+        const data = await response.json();
+        // Anthropic + OpenAI + LM Studio: { data: [{ id }] }; Ollama: { models: [{ name }] }
+        const items = data.data || data.models || [];
+        return items.map((item) => item.id || item.name).filter(Boolean).sort();
+    }
+
+    let checkSequence = 0;
+
+    async function checkConnection() {
+        const def = providerDef();
+        if (def.needsKey && !apiKeyInput.value.trim()) {
+            setConnection('Enter an API key to list models.', '');
+            return;
+        }
+
+        const sequence = ++checkSequence;
+        setConnection('Connecting…', 'pending');
+        checkButton.disabled = true;
+
+        try {
+            const models = await listModels();
+            if (sequence !== checkSequence) {
+                return;
+            }
+            modelList.replaceChildren(...models.map((id) => {
+                const option = document.createElement('option');
+                option.value = id;
+                return option;
+            }));
+            if (!models.length) {
+                setConnection(`Connected, but ${def.label} reports no models.`, 'error');
+            } else {
+                if (!models.includes(modelInput.value.trim())) {
+                    modelInput.value = models.find((id) => id === def.model) || models[0];
+                }
+                setConnection(`Connected. ${models.length} model${models.length === 1 ? '' : 's'} available.`, 'ok');
+            }
+            saveSettings();
+        } catch (error) {
+            if (sequence !== checkSequence) {
+                return;
+            }
+            const hint = def.needsKey ? '' : ` Is ${def.label} running at ${baseUrl()}${def.label === 'LM Studio' ? ' with the server started and CORS enabled' : ''}?`;
+            setConnection(`Could not connect: ${error.message}.${hint}`, 'error');
+        } finally {
+            if (sequence === checkSequence) {
+                checkButton.disabled = false;
+            }
+        }
     }
 
     /* ---------- log + file UI ---------- */
@@ -84,17 +215,57 @@
         return line;
     }
 
+    function setBusy(text) {
+        busyIndicator.textContent = text;
+        busyIndicator.hidden = !text;
+        if (text) {
+            logElement.append(busyIndicator);
+            logElement.scrollTop = logElement.scrollHeight;
+        } else {
+            busyIndicator.remove();
+        }
+    }
+
+    // path → 'new' | 'modified' | 'deleted', compared with the plain scaffold.
+    const fileStatus = new Map();
+    let scaffoldFiles = null;
+    let lastTouched = null;
+
+    function updateFileStatus(path) {
+        const original = scaffoldFiles.get(path);
+        const current = files.get(path);
+        if (current === undefined) {
+            fileStatus.set(path, original === undefined ? undefined : 'deleted');
+        } else if (original === undefined) {
+            fileStatus.set(path, 'new');
+        } else if (original !== current) {
+            fileStatus.set(path, 'modified');
+        } else {
+            fileStatus.delete(path);
+        }
+        lastTouched = path;
+    }
+
     function renderFiles() {
         fileList.replaceChildren();
         if (!files) {
             return;
         }
 
-        for (const path of [...files.keys()].sort()) {
+        const paths = new Set([...files.keys(), ...[...fileStatus.entries()].filter(([, status]) => status === 'deleted').map(([path]) => path)]);
+        for (const path of [...paths].sort()) {
+            const status = fileStatus.get(path);
             const button = document.createElement('button');
             button.type = 'button';
-            button.className = 'ai-file';
-            button.textContent = path;
+            button.className = `ai-file${status ? ` is-${status}` : ''}${path === lastTouched ? ' is-latest' : ''}`;
+            button.disabled = status === 'deleted';
+            button.append(path);
+            if (status) {
+                const badge = document.createElement('span');
+                badge.className = 'ai-file-badge';
+                badge.textContent = status;
+                button.append(badge);
+            }
             button.addEventListener('click', () => {
                 fileViewerTitle.textContent = path;
                 fileViewerContent.textContent = files.get(path);
@@ -180,6 +351,7 @@
             case 'write_file': {
                 const path = normalizePath(input.path);
                 files.set(path, String(input.content ?? ''));
+                updateFileStatus(path);
                 return `Wrote ${path}`;
             }
             case 'edit_file': {
@@ -197,6 +369,7 @@
                     throw new Error(`old_string occurs more than once in ${path}; include more context`);
                 }
                 files.set(path, content.slice(0, first) + String(input.new_string ?? '') + content.slice(first + oldString.length));
+                updateFileStatus(path);
                 return `Edited ${path}`;
             }
             case 'delete_file': {
@@ -204,6 +377,7 @@
                 if (!files.delete(path)) {
                     throw new Error(`File not found: ${path}`);
                 }
+                updateFileStatus(path);
                 return `Deleted ${path}`;
             }
             default:
@@ -327,15 +501,10 @@
 
     // Returns { text, toolCalls: [{id, name, input}], stopReason, assistantMessage }
     async function callAnthropic(systemPrompt, history, signal) {
-        const response = await fetch(endpointInput.value.trim() || DEFAULTS.anthropic.endpoint, {
+        const response = await fetch(baseUrl() + providerDef().chatPath, {
             method: 'POST',
             signal,
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': apiKeyInput.value.trim(),
-                'anthropic-version': '2023-06-01',
-                'anthropic-dangerous-direct-browser-access': 'true'
-            },
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
             body: JSON.stringify({
                 model: modelInput.value.trim(),
                 max_tokens: 64000,
@@ -362,6 +531,7 @@
                 } else if (block.type === 'text') {
                     blocks[event.index] = { type: 'text', text: '' };
                     textLine = appendLog('assistant', '');
+                    setBusy('Writing…');
                 } else {
                     blocks[event.index] = block;
                 }
@@ -414,16 +584,10 @@
 
     // OpenAI-compatible chat completions, also used for Ollama / LM Studio.
     async function callOpenAI(systemPrompt, history, signal) {
-        const headers = { 'Content-Type': 'application/json' };
-        const apiKey = apiKeyInput.value.trim();
-        if (apiKey) {
-            headers.Authorization = `Bearer ${apiKey}`;
-        }
-
-        const response = await fetch(endpointInput.value.trim(), {
+        const response = await fetch(baseUrl() + providerDef().chatPath, {
             method: 'POST',
             signal,
-            headers,
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
             body: JSON.stringify({
                 model: modelInput.value.trim(),
                 stream: true,
@@ -454,6 +618,7 @@
             if (delta.content) {
                 if (!textLine) {
                     textLine = appendLog('assistant', '');
+                    setBusy('Writing…');
                 }
                 text += delta.content;
                 textLine.textContent = text;
@@ -502,9 +667,9 @@
     /* ---------- agent loop ---------- */
 
     async function runAgent(prompt) {
-        const provider = providerSelect.value;
-        const call = provider === 'anthropic' ? callAnthropic : callOpenAI;
-        const toolResults = provider === 'anthropic' ? toolResultsAnthropic : toolResultsOpenAI;
+        const api = providerDef().api;
+        const call = api === 'anthropic' ? callAnthropic : callOpenAI;
+        const toolResults = api === 'anthropic' ? toolResultsAnthropic : toolResultsOpenAI;
         const systemPrompt = buildSystemPrompt(await getWpAppReadme());
 
         turnStart = messages.length;
@@ -512,16 +677,28 @@
         appendLog('user', prompt.trim());
 
         for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
+            setBusy('Thinking…');
             const result = await call(systemPrompt, messages, abortController.signal);
             messages.push(result.assistantMessage);
 
             if (!result.toolCalls.length) {
                 if (result.stopReason === 'max_tokens' || result.stopReason === 'length') {
-                    appendLog('error', 'The model hit its output limit. Send a follow-up prompt such as "continue".');
+                    const line = appendLog('error', 'The model hit its output limit before finishing. ');
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'secondary small';
+                    button.textContent = 'Continue';
+                    button.addEventListener('click', () => {
+                        button.disabled = true;
+                        promptInput.value = 'Continue where you left off.';
+                        generate();
+                    });
+                    line.append(button);
                 }
                 return;
             }
 
+            setBusy('Applying changes…');
             const results = [];
             for (const toolCall of result.toolCalls) {
                 const line = appendLog('tool', describeToolCall(toolCall.name, toolCall.input));
@@ -545,12 +722,17 @@
 
     function resetConversation() {
         files = null;
+        scaffoldFiles = null;
         config = null;
         messages = [];
+        fileStatus.clear();
+        lastTouched = null;
         window.CreateWpApp.setGeneratedFiles(null, null);
         logElement.replaceChildren();
         fileList.replaceChildren();
         fileViewer.hidden = true;
+        promptLabel.textContent = 'Describe your app';
+        promptInput.placeholder = promptPlaceholder;
     }
 
     async function generate() {
@@ -559,13 +741,16 @@
             promptInput.focus();
             return;
         }
-        if (providerSelect.value !== 'local' && !apiKeyInput.value.trim()) {
+        if (providerDef().needsKey && !apiKeyInput.value.trim()) {
             apiKeyInput.focus();
             window.CreateWpApp.setStatus('Enter an API key first.', true);
             return;
         }
-
-        const form = document.getElementById('generator-form');
+        if (!modelInput.value.trim()) {
+            modelInput.focus();
+            window.CreateWpApp.setStatus('Choose a model first.', true);
+            return;
+        }
         if (!form.reportValidity()) {
             return;
         }
@@ -577,19 +762,22 @@
         }
         config = nextConfig;
         if (!files) {
-            files = window.CreateWpApp.buildFiles(config);
+            scaffoldFiles = window.CreateWpApp.buildFiles(config);
+            files = new Map(scaffoldFiles);
             renderFiles();
         }
 
         abortController = new AbortController();
-        generateButton.disabled = true;
-        stopButton.hidden = false;
+        setGenerating(true);
         window.CreateWpApp.setStatus('');
 
         try {
             await runAgent(prompt);
             promptInput.value = '';
-            window.CreateWpApp.setStatus('Done. Download the zip or run it in Playground; send another prompt to refine.');
+            promptLabel.textContent = 'Follow-up prompt';
+            promptInput.placeholder = 'Refine the app, ask for changes, or say "continue" if it stopped early.';
+            appendLog('done', 'Finished. Download the zip or run it in Playground, or send another prompt to refine.');
+            window.CreateWpApp.setStatus('');
         } catch (error) {
             if (error.name === 'AbortError') {
                 appendLog('error', 'Stopped. File changes made so far are kept; the interrupted turn is dropped from the conversation.');
@@ -600,9 +788,27 @@
             }
         } finally {
             abortController = null;
-            generateButton.disabled = false;
-            stopButton.hidden = true;
+            setGenerating(false);
         }
+    }
+
+    // Lock everything that must not change mid-run and show progress.
+    function setGenerating(active) {
+        setBusy(active ? 'Starting…' : '');
+        generateButton.disabled = active;
+        generateButton.classList.toggle('is-busy', active);
+        generateButton.textContent = active ? 'Generating…' : 'Generate with AI';
+        stopButton.hidden = !active;
+        resetButton.disabled = active;
+        downloadButton.disabled = active;
+        playgroundButton.disabled = active;
+        for (const field of form.querySelectorAll('input, select, textarea')) {
+            if (field !== promptInput || active) {
+                field.disabled = active;
+            }
+        }
+        checkButton.disabled = active;
+        form.classList.toggle('is-generating', active);
     }
 
     providerSelect.addEventListener('change', () => {
@@ -610,6 +816,19 @@
         applyProviderSettings();
     });
     generateButton.addEventListener('click', generate);
+    checkButton.addEventListener('click', () => {
+        saveSettings();
+        checkConnection();
+    });
+    apiKeyInput.addEventListener('change', () => {
+        saveSettings();
+        checkConnection();
+    });
+    endpointInput.addEventListener('change', () => {
+        saveSettings();
+        checkConnection();
+    });
+    modelInput.addEventListener('change', saveSettings);
     stopButton.addEventListener('click', () => abortController?.abort());
     resetButton.addEventListener('click', () => {
         resetConversation();
@@ -626,6 +845,6 @@
     });
 
     const saved = loadSettings();
-    providerSelect.value = saved.provider && DEFAULTS[saved.provider] ? saved.provider : 'anthropic';
+    providerSelect.value = saved.provider && PROVIDERS[saved.provider] ? saved.provider : 'anthropic';
     applyProviderSettings();
 })();
