@@ -531,6 +531,7 @@
             padding: 0 14px 0 6px;
             border: 1px solid var(--line);
             border-radius: 999px;
+            white-space: nowrap;
             background: var(--surface);
             color: var(--muted);
             font-weight: 700;
@@ -560,6 +561,7 @@
         .step-number {
             display: inline-grid;
             place-items: center;
+            flex-shrink: 0;
             width: 26px;
             height: 26px;
             border-radius: 50%;
@@ -652,6 +654,23 @@
             .field-row {
                 grid-template-columns: 1fr;
             }
+
+            .stepbar .step:not(.is-current) {
+                padding: 0 6px;
+            }
+
+            .stepbar .step:not(.is-current) .step-label {
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                overflow: hidden;
+                clip: rect(0 0 0 0);
+                white-space: nowrap;
+            }
+
+            .stepbar .step.is-current .step-note {
+                display: none;
+            }
         }
     </style>
 </head>
@@ -665,9 +684,9 @@
         </header>
 
         <nav class="stepbar" aria-label="Progress">
-            <button type="button" class="step is-current" data-step="1"><span class="step-number">1</span> Name your app</button>
-            <button type="button" class="step" data-step="2" disabled><span class="step-number">2</span> Build with AI <span class="step-note">(optional)</span></button>
-            <button type="button" class="step" data-step="3" disabled><span class="step-number">3</span> Result</button>
+            <button type="button" class="step is-current" data-step="1"><span class="step-number">1</span> <span class="step-label">Name your app</span></button>
+            <button type="button" class="step" data-step="2" disabled><span class="step-number">2</span> <span class="step-label">Build with AI <span class="step-note">(optional)</span></span></button>
+            <button type="button" class="step" data-step="3" disabled><span class="step-number">3</span> <span class="step-label">Result</span></button>
         </nav>
 
         <main>
