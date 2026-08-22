@@ -7,6 +7,7 @@
     const urlPathInput = document.getElementById('url-path');
     const downloadButton = document.getElementById('download-button');
     const playgroundButton = document.getElementById('playground-button');
+    const playgroundFrame = document.getElementById('playground-frame');
 
     let slugEdited = false;
     let namespaceEdited = false;
@@ -452,7 +453,6 @@ register_deactivation_hook( __FILE__, function() {
             author: String(formData.get('author') || '').trim(),
             urlPath: normalizeUrlPath(String(formData.get('urlPath') || slug), slug),
             setupType: String(formData.get('setupType') || 'full'),
-            installAiAssistant: formData.get('installAiAssistant') === '1',
             identifier: toIdentifier(slug)
         };
     }
@@ -488,164 +488,88 @@ register_deactivation_hook( __FILE__, function() {
             config
         );
         const files = new Map();
-        files.set(`${config.slug}/${config.slug}.php`, pluginPhp);
-        files.set(`${config.slug}/templates/index.php`, replaceTokens(templateTemplate, config));
-        files.set(`${config.slug}/composer.json`, buildComposer(config));
-        files.set(`${config.slug}/vendor/autoload.php`, autoloadPolyfill);
-        files.set(`${config.slug}/README.md`, `# ${config.pluginName}\n\nA WordPress app powered by [WpApp](https://github.com/akirk/wp-app).\n\n## Setup\n\n1. Move this folder to \`wp-content/plugins/\` if needed.\n2. Activate the plugin in WordPress.\n3. Visit \`/${config.urlPath}/\`.\n\nWpApp is bundled in \`vendor/akirk/wp-app\` with a Composer-lite autoloader. You can still run \`composer install\` later to replace the bundled autoloader with Composer's generated one.\n`);
-        files.set(`${config.slug}/.gitignore`, `/vendor/\n`);
+        files.set(`${config.slug}.php`, pluginPhp);
+        files.set('templates/index.php', replaceTokens(templateTemplate, config));
+        files.set('composer.json', buildComposer(config));
+        files.set('vendor/autoload.php', autoloadPolyfill);
+        files.set('README.md', `# ${config.pluginName}\n\nA WordPress app powered by [WpApp](https://github.com/akirk/wp-app).\n\n## Setup\n\n1. Move this folder to \`wp-content/plugins/\` if needed.\n2. Activate the plugin in WordPress.\n3. Visit \`/${config.urlPath}/\`.\n\nWpApp is bundled in \`vendor/akirk/wp-app\` with a Composer-lite autoloader. You can still run \`composer install\` later to replace the bundled autoloader with Composer's generated one.\n`);
+        files.set('.gitignore', `/vendor/\n`);
 
         if (config.setupType === 'full') {
-            files.set(`${config.slug}/src/App.php`, replaceTokens(appTemplate, config));
+            files.set('src/App.php', replaceTokens(appTemplate, config));
         }
 
         return files;
     }
 
-    async function addBundledWpApp(zip, config) {
-        const response = await fetch('assets/wp-app.zip');
-        if (!response.ok) {
-            throw new Error('Bundled WpApp asset is missing. Build the Pages artifact before previewing downloads locally.');
+    // Files edited by the AI module. When set, downloads and Playground runs
+    // use these instead of the plain scaffold. Keys are plugin-relative paths.
+    let generatedFiles = null;
+    let generatedSlug = null;
+
+    function setGeneratedFiles(files, slug) {
+        generatedFiles = files;
+        generatedSlug = slug;
+    }
+
+    function getCurrentFiles(config) {
+        if (generatedFiles && generatedSlug === config.slug) {
+            return generatedFiles;
         }
 
-        const dependencyZip = await window.JSZip.loadAsync(await response.arrayBuffer());
-        const entries = Object.values(dependencyZip.files);
+        return buildFiles(config);
+    }
 
-        for (const entry of entries) {
-            if (entry.dir) {
-                continue;
+    async function buildZip(config, files) {
+        const zip = new window.JSZip();
+
+        for (const [path, content] of files) {
+            zip.file(`${config.slug}/${path}`, content);
+        }
+
+        const dependencyZip = await window.JSZip.loadAsync(await fetchAsset('wp-app.zip'));
+        for (const entry of Object.values(dependencyZip.files)) {
+            if (!entry.dir) {
+                zip.file(`${config.slug}/vendor/akirk/wp-app/${entry.name}`, await entry.async('uint8array'));
             }
-
-            zip.file(`${config.slug}/vendor/akirk/wp-app/${entry.name}`, await entry.async('uint8array'));
-        }
-    }
-
-    function getRelativeFiles(config) {
-        const prefix = `${config.slug}/`;
-        const files = {};
-
-        for (const [path, content] of buildFiles(config)) {
-            files[path.startsWith(prefix) ? path.slice(prefix.length) : path] = content;
         }
 
-        return files;
+        return zip;
     }
 
-    function toBase64(value) {
-        const bytes = new TextEncoder().encode(value);
-        let binary = '';
-        const chunkSize = 0x8000;
-
-        for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-            binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+    async function fetchAsset(name) {
+        const response = await fetch(`assets/${name}`);
+        if (!response.ok) {
+            throw new Error(`Bundled asset ${name} is missing. Build the Pages artifact before previewing locally.`);
         }
 
-        return btoa(binary);
+        return new Uint8Array(await response.arrayBuffer());
     }
 
-    function buildPlaygroundPhp(config) {
-        const filesPayload = toBase64(JSON.stringify(getRelativeFiles(config)));
-        const configPayload = toBase64(JSON.stringify(config));
-
-        return `<?php require_once '/wordpress/wp-load.php';
-
-$config = json_decode( base64_decode( ${JSON.stringify(configPayload)} ), true );
-$files = json_decode( base64_decode( ${JSON.stringify(filesPayload)} ), true );
-$target_dir = WP_CONTENT_DIR . '/plugins/' . $config['slug'];
-
-$remove_directory = static function( string $directory ) use ( &$remove_directory ): void {
-    if ( ! is_dir( $directory ) ) {
-        return;
-    }
-
-    foreach ( scandir( $directory ) as $entry ) {
-        if ( $entry === '.' || $entry === '..' ) {
-            continue;
-        }
-
-        $path = $directory . '/' . $entry;
-        if ( is_dir( $path ) && ! is_link( $path ) ) {
-            $remove_directory( $path );
-            continue;
-        }
-
-        unlink( $path );
-    }
-
-    rmdir( $directory );
-};
-
-$ensure_directory = static function( string $directory ): void {
-    if ( ! is_dir( $directory ) && ! mkdir( $directory, 0777, true ) && ! is_dir( $directory ) ) {
-        throw new RuntimeException( 'Could not create directory: ' . $directory );
-    }
-};
-
-$remove_directory( $target_dir );
-$ensure_directory( $target_dir );
-
-foreach ( $files as $relative_path => $content ) {
-    $relative_path = ltrim( str_replace( '\\\\', '/', $relative_path ), '/' );
-    if ( strpos( $relative_path, '..' ) !== false ) {
-        throw new RuntimeException( 'Invalid scaffold path: ' . $relative_path );
-    }
-
-    $path = $target_dir . '/' . $relative_path;
-    $ensure_directory( dirname( $path ) );
-    file_put_contents( $path, $content );
-}
-
-flush_rewrite_rules();
-`;
-    }
-
-    function buildPlaygroundBlueprint(config) {
+    // The plugin is installed from zip bytes held in memory, so the blueprint
+    // never has to travel through a URL and can carry a large generated app.
+    function buildPlaygroundBlueprint(config, zipBytes) {
         const steps = [
             {
                 step: 'login',
                 username: 'admin',
                 password: 'password'
-            }
-        ];
-
-        if (config.installAiAssistant) {
-            steps.push({
+            },
+            {
                 step: 'installPlugin',
                 pluginData: {
-                    resource: 'git:directory',
-                    url: 'https://github.com/akirk/ai-assistant',
-                    ref: 'refs/heads/main'
+                    resource: 'literal',
+                    name: `${config.slug}.zip`,
+                    contents: zipBytes
                 },
                 options: {
                     activate: true,
-                    targetFolderName: 'ai-assistant'
+                    targetFolderName: config.slug
                 }
-            });
-        }
-
-        steps.push(
-            {
-                step: 'runPHP',
-                code: buildPlaygroundPhp(config)
-            },
-            {
-                step: 'writeFiles',
-                writeToPath: `/wordpress/wp-content/plugins/${config.slug}/vendor/akirk/wp-app`,
-                filesTree: {
-                    resource: 'git:directory',
-                    url: 'https://github.com/akirk/wp-app',
-                    ref: 'refs/heads/main'
-                }
-            },
-            {
-                step: 'activatePlugin',
-                pluginName: config.pluginName,
-                pluginPath: `${config.slug}/${config.slug}.php`
             }
-        );
+        ];
 
         return {
-            $schema: 'https://playground.wordpress.net/blueprint-schema.json',
             landingPage: `/${config.urlPath}/`,
             preferredVersions: {
                 php: '8.3',
@@ -693,32 +617,28 @@ flush_rewrite_rules();
 
     pluginNameInput.addEventListener('input', syncDerivedFields);
 
+    function setStatus(message, isError = false) {
+        status.classList.toggle('error', isError);
+        status.textContent = message;
+    }
+
     async function downloadZip() {
         if (!form.reportValidity()) {
             return;
         }
 
-        status.classList.remove('error');
-        status.textContent = '';
+        setStatus('');
 
         if (!window.JSZip) {
-            status.classList.add('error');
-            status.textContent = 'Zip library failed to load. Check your network connection and try again.';
+            setStatus('Zip library failed to load. Check your network connection and try again.', true);
             return;
         }
 
         const config = getConfig();
-        const zip = new window.JSZip();
-        const files = buildFiles(config);
-
-        for (const [path, content] of files) {
-            zip.file(path, content);
-        }
 
         try {
-            status.textContent = 'Adding bundled WpApp...';
-            await addBundledWpApp(zip, config);
-            status.textContent = 'Building zip...';
+            setStatus('Building zip...');
+            const zip = await buildZip(config, getCurrentFiles(config));
             const blob = await zip.generateAsync({ type: 'blob' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -728,37 +648,59 @@ flush_rewrite_rules();
             link.click();
             link.remove();
             URL.revokeObjectURL(url);
-            status.textContent = `Downloaded ${config.slug}.zip`;
+            setStatus(`Downloaded ${config.slug}.zip`);
         } catch (error) {
-            status.classList.add('error');
-            status.textContent = error.message;
+            setStatus(error.message, true);
         }
     }
 
-    function runInPlayground() {
+    // Boots WordPress Playground in an iframe on this page and installs the
+    // plugin zip directly from memory, so no blueprint has to travel via URL.
+    async function runInPlayground() {
         if (!form.reportValidity()) {
             return;
         }
 
-        const config = getConfig();
-        const blueprint = buildPlaygroundBlueprint(config);
-        const url = `https://playground.wordpress.net/#${toBase64(JSON.stringify(blueprint))}`;
-        const playgroundWindow = window.open(url, '_blank', 'noopener');
+        setStatus('');
 
-        if (playgroundWindow) {
-            status.classList.remove('error');
-            status.textContent = 'Opening WordPress Playground...';
+        if (!window.JSZip) {
+            setStatus('Zip library failed to load. Check your network connection and try again.', true);
             return;
         }
 
-        status.classList.add('error');
-        status.innerHTML = '';
-        const link = document.createElement('a');
-        link.href = url;
-        link.target = '_blank';
-        link.rel = 'noopener';
-        link.textContent = 'Open WordPress Playground';
-        status.append('Pop-up blocked. ', link);
+        const config = getConfig();
+        playgroundButton.disabled = true;
+
+        try {
+            setStatus('Building zip...');
+            const zip = await buildZip(config, getCurrentFiles(config));
+            const zipBytes = await zip.generateAsync({ type: 'uint8array' });
+            const blueprint = buildPlaygroundBlueprint(config, zipBytes);
+
+            setStatus('Loading WordPress Playground...');
+            const playgroundApi = await import('https://playground.wordpress.net/client/index.js');
+
+            const iframe = document.createElement('iframe');
+            iframe.className = 'playground-iframe';
+            iframe.title = 'WordPress Playground';
+            playgroundFrame.hidden = false;
+            playgroundFrame.replaceChildren(iframe);
+            iframe.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            await playgroundApi.startPlaygroundWeb({
+                iframe,
+                remoteUrl: 'https://playground.wordpress.net/remote.html',
+                blueprint
+            });
+
+            setStatus(`Running ${config.pluginName} in Playground.`);
+        } catch (error) {
+            playgroundFrame.hidden = true;
+            playgroundFrame.replaceChildren();
+            setStatus(`WordPress Playground could not be loaded: ${error.message || error}`, true);
+        } finally {
+            playgroundButton.disabled = false;
+        }
     }
 
     form.addEventListener('submit', (event) => {
@@ -769,4 +711,13 @@ flush_rewrite_rules();
     playgroundButton.addEventListener('click', runInPlayground);
 
     syncDerivedFields();
+
+    // Shared with ai.js.
+    window.CreateWpApp = {
+        getConfig,
+        buildFiles,
+        setGeneratedFiles,
+        setStatus,
+        runInPlayground
+    };
 })();
