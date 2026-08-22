@@ -707,6 +707,58 @@ register_deactivation_hook( __FILE__, function() {
         event.preventDefault();
     });
 
+    /* ---------- steps ---------- */
+
+    const stepButtons = [...document.querySelectorAll('.stepbar .step')];
+    const stepPanels = [...document.querySelectorAll('.step-panel')];
+    let highestStep = 1;
+    let currentStep = 1;
+
+    function goToStep(step) {
+        if (step > 1 && !form.reportValidity()) {
+            return false;
+        }
+
+        const changed = step !== currentStep;
+        currentStep = step;
+        highestStep = Math.max(highestStep, step);
+
+        for (const panel of stepPanels) {
+            panel.hidden = Number(panel.dataset.stepPanel) !== step;
+        }
+
+        for (const button of stepButtons) {
+            const number = Number(button.dataset.step);
+            button.classList.toggle('is-current', number === step);
+            button.classList.toggle('is-done', number < step);
+            button.disabled = number > highestStep || number === step;
+        }
+
+        if (changed) {
+            document.dispatchEvent(new CustomEvent('wizard:step', { detail: { step } }));
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        return true;
+    }
+
+    for (const button of stepButtons) {
+        button.addEventListener('click', () => goToStep(Number(button.dataset.step)));
+    }
+
+    for (const button of document.querySelectorAll('.back-button')) {
+        button.addEventListener('click', () => goToStep(Number(button.dataset.step)));
+    }
+
+    document.getElementById('next-button').addEventListener('click', () => goToStep(2));
+
+    // Navigating away from the result hides a running Playground.
+    document.addEventListener('wizard:step', (event) => {
+        if (event.detail.step !== 3) {
+            playgroundFrame.hidden = true;
+            playgroundFrame.replaceChildren();
+        }
+    });
+
     downloadButton.addEventListener('click', downloadZip);
     playgroundButton.addEventListener('click', runInPlayground);
 
@@ -718,6 +770,8 @@ register_deactivation_hook( __FILE__, function() {
         buildFiles,
         setGeneratedFiles,
         setStatus,
-        runInPlayground
+        runInPlayground,
+        goToStep,
+        getStep: () => currentStep
     };
 })();

@@ -69,12 +69,6 @@
             font-size: 1.05rem;
         }
 
-        .layout {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
-            gap: 22px;
-            align-items: start;
-        }
 
         .panel {
             background: var(--surface);
@@ -83,10 +77,10 @@
             box-shadow: var(--shadow);
         }
 
-        form {
+        form,
+        .step-panel {
             display: grid;
             gap: 18px;
-            padding: 22px;
         }
 
         fieldset {
@@ -221,11 +215,8 @@
             color: var(--danger);
         }
 
-        aside {
-            padding: 22px;
-        }
 
-        aside h2 {
+        .result-side h2 {
             margin: 0 0 12px;
             font-size: 1.1rem;
         }
@@ -524,9 +515,131 @@
             }
         }
 
+        .stepbar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 18px;
+        }
+
+        .stepbar .step {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 40px;
+            padding: 0 14px 0 6px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: var(--surface);
+            color: var(--muted);
+            font-weight: 700;
+        }
+
+        .stepbar .step:disabled {
+            opacity: 1;
+            cursor: default;
+        }
+
+        .stepbar .step.is-done {
+            color: var(--accent-strong);
+            cursor: pointer;
+        }
+
+        .stepbar .step.is-current {
+            border-color: var(--accent);
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .step-number {
+            display: inline-grid;
+            place-items: center;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: var(--surface-alt);
+            color: var(--text);
+            font-size: 0.85rem;
+        }
+
+        .step.is-current .step-number {
+            background: #fff;
+            color: var(--accent-strong);
+        }
+
+        .step-panel {
+            padding: 22px;
+        }
+
+        .step-panel fieldset:last-of-type {
+            padding-bottom: 18px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .intro {
+            margin: 0;
+            color: var(--muted);
+        }
+
+        button.link {
+            min-height: 0;
+            padding: 0 6px;
+            border: 0;
+            background: none;
+            color: var(--muted);
+            font-weight: 600;
+            text-decoration: underline;
+        }
+
+        .result-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+            gap: 28px;
+            align-items: start;
+        }
+
+        .result-main {
+            display: grid;
+            gap: 18px;
+        }
+
+        .result-main h2,
+        .result-side h2 {
+            margin: 0 0 4px;
+            font-size: 1.2rem;
+        }
+
+        .ai-result {
+            display: grid;
+            gap: 14px;
+        }
+
+        .ai-log {
+            max-height: 50vh;
+        }
+
+        .field-inline textarea {
+            flex: 1;
+        }
+
+        .output-actions {
+            padding-top: 14px;
+            border-top: 1px solid var(--line);
+        }
+
+        .result-side {
+            padding-left: 28px;
+            border-left: 1px solid var(--line);
+        }
+
         @media (max-width: 820px) {
-            .layout {
+            .layout,
+            .result-layout {
                 grid-template-columns: 1fr;
+            }
+
+            .result-side {
+                padding-left: 0;
+                border-left: 0;
             }
 
             .field-row {
@@ -544,9 +657,15 @@
             </div>
         </header>
 
-        <main class="layout">
-            <section class="panel">
-                <form id="generator-form">
+        <nav class="stepbar" aria-label="Progress">
+            <button type="button" class="step is-current" data-step="1"><span class="step-number">1</span> Plugin</button>
+            <button type="button" class="step" data-step="2" disabled><span class="step-number">2</span> Build with AI</button>
+            <button type="button" class="step" data-step="3" disabled><span class="step-number">3</span> Result</button>
+        </nav>
+
+        <main>
+            <form id="generator-form">
+                <section class="panel step-panel" data-step-panel="1">
                     <fieldset>
                         <legend>Plugin</legend>
                         <div class="field">
@@ -588,13 +707,15 @@
                         </div>
                     </fieldset>
 
+                    <div class="actions">
+                        <button id="next-button" type="button">Next</button>
+                    </div>
+                </section>
+
+                <section class="panel step-panel" data-step-panel="2" hidden>
                     <fieldset>
-                        <legend>Build with AI (optional)</legend>
-                        <div class="field">
-                            <label for="ai-prompt">Describe your app</label>
-                            <textarea id="ai-prompt" name="aiPrompt" rows="4" placeholder="A reading list where I can add books with title, author and status, and see them grouped by status."></textarea>
-                            <p class="hint">The model edits the scaffold using file tools and you can send follow-up prompts to refine it. Your prompt and the plugin files go directly to the provider you choose.</p>
-                        </div>
+                        <legend>Build with AI</legend>
+                        <p class="intro">Optional. Describe what the app should do and a model will write it on top of the scaffold, using file tools, right here in your browser. Or skip this and take the plain scaffold.</p>
                         <div class="field-row">
                             <div class="field">
                                 <label for="ai-provider">Provider</label>
@@ -624,44 +745,71 @@
                             <p id="ai-connection" class="ai-connection" aria-live="polite"></p>
                             <p class="hint">Keys and settings are stored in this browser only; requests go straight to the provider, nothing passes through a server of ours.</p>
                         </div>
-                        <div class="actions">
-                            <button id="ai-generate-button" type="button">Generate with AI</button>
-                            <button id="ai-stop-button" class="secondary" type="button" hidden>Stop</button>
-                            <button id="ai-reset-button" class="secondary" type="button">Reset</button>
+                        <div class="field">
+                            <label for="ai-prompt">What should the app do?</label>
+                            <textarea id="ai-prompt" name="aiPrompt" rows="5"></textarea>
+                            <p class="hint">The more specific, the better: what is stored, what screens exist, who can use it.</p>
                         </div>
-                        <div id="ai-log" class="ai-log" aria-live="polite"></div>
-                        <div id="ai-busy" class="ai-busy" hidden></div>
                     </fieldset>
 
                     <div class="actions">
-                        <button id="download-button" type="button">Download zip</button>
-                        <button id="playground-button" class="secondary" type="button">Run in Playground</button>
-                        <output id="status" class="status" aria-live="polite"></output>
+                        <button id="ai-generate-button" type="button">Generate with AI</button>
+                        <button id="skip-ai-button" class="secondary" type="button">Skip, just the scaffold</button>
+                        <button type="button" class="link back-button" data-step="1">Back</button>
                     </div>
-                </form>
-            </section>
+                </section>
 
-            <aside class="panel">
-                <h2>After Download</h2>
-                <ol class="steps">
-                    <li>Extract the zip file.</li>
-                    <li>Move the plugin folder into <code>wp-content/plugins/</code>.</li>
-                    <li>Activate the plugin in WordPress.</li>
-                    <li>Open the configured URL path.</li>
-                </ol>
-                <div class="notes">
-                    WpApp runtime files are bundled into the Pages artifact and added to your zip with a Composer-lite autoloader.
-                </div>
-                <h2 class="files-heading">Files</h2>
-                <div id="ai-files" class="ai-files"></div>
-                <div id="ai-file-viewer" class="ai-file-viewer" hidden>
-                    <div class="ai-file-viewer-head">
-                        <code id="ai-file-viewer-title"></code>
-                        <button id="ai-file-viewer-close" type="button" class="secondary">Close</button>
+                <section class="panel step-panel" data-step-panel="3" hidden>
+                    <div class="result-layout">
+                        <div class="result-main">
+                            <div id="ai-result" class="ai-result" hidden>
+                                <h2>Building <span class="result-plugin-name"></span></h2>
+                                <div id="ai-log" class="ai-log" aria-live="polite"></div>
+                                <div id="ai-busy" class="ai-busy" hidden></div>
+                                <div class="field" id="ai-followup-field">
+                                    <label for="ai-followup">Refine</label>
+                                    <div class="field-inline">
+                                        <textarea id="ai-followup" name="aiFollowup" rows="2" placeholder="Ask for changes, or say &quot;continue&quot; if it stopped early."></textarea>
+                                        <button id="ai-followup-button" type="button" class="secondary">Send</button>
+                                        <button id="ai-stop-button" class="secondary" type="button" hidden>Stop</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="scaffold-result" class="scaffold-result" hidden>
+                                <h2><span class="result-plugin-name"></span> is ready</h2>
+                                <p class="intro">The scaffold is generated with WpApp bundled. Download it, or run it in WordPress Playground right here.</p>
+                            </div>
+                            <div id="output-actions" class="actions output-actions">
+                                <button id="download-button" type="button">Download zip</button>
+                                <button id="playground-button" class="secondary" type="button">Run in Playground</button>
+                                <button type="button" class="link back-button" data-step="2">Back</button>
+                                <output id="status" class="status" aria-live="polite"></output>
+                            </div>
+                        </div>
+                        <aside class="result-side">
+                            <h2>Files</h2>
+                            <div id="ai-files" class="ai-files"></div>
+                            <div id="ai-file-viewer" class="ai-file-viewer" hidden>
+                                <div class="ai-file-viewer-head">
+                                    <code id="ai-file-viewer-title"></code>
+                                    <button id="ai-file-viewer-close" type="button" class="secondary small">Close</button>
+                                </div>
+                                <pre id="ai-file-viewer-content"></pre>
+                            </div>
+                            <h2 class="files-heading">After Download</h2>
+                            <ol class="steps">
+                                <li>Extract the zip file.</li>
+                                <li>Move the plugin folder into <code>wp-content/plugins/</code>.</li>
+                                <li>Activate the plugin in WordPress.</li>
+                                <li>Open the configured URL path.</li>
+                            </ol>
+                            <div class="notes">
+                                WpApp runtime files are bundled into the zip with a Composer-lite autoloader.
+                            </div>
+                        </aside>
                     </div>
-                    <pre id="ai-file-viewer-content"></pre>
-                </div>
-            </aside>
+                </section>
+            </form>
         </main>
 
         <section id="playground-frame" class="playground-frame" hidden></section>
