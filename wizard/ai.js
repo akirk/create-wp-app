@@ -93,8 +93,20 @@
         return PROVIDERS[providerSelect.value];
     }
 
+    // Earlier versions stored the full chat URL as the endpoint; strip that.
+    function normalizeEndpoint(value) {
+        return String(value || '')
+            .trim()
+            .replace(/\/+$/, '')
+            .replace(/\/v1\/(messages|chat\/completions)$/, '');
+    }
+
     function baseUrl() {
-        return (endpointInput.value.trim() || providerDef().endpoint).replace(/\/+$/, '');
+        const def = providerDef();
+        if (def.needsKey) {
+            return def.endpoint;
+        }
+        return normalizeEndpoint(endpointInput.value) || def.endpoint;
     }
 
     function authHeaders() {
@@ -128,15 +140,18 @@
     }
 
     let currentProvider = null;
+    // Keys entered in this page load, per provider, so switching providers
+    // back and forth does not lose them. Never written to storage.
+    const apiKeys = {};
 
     function saveSettings() {
         const settings = loadSettings();
         const provider = currentProvider || providerSelect.value;
         settings.provider = providerSelect.value;
+        // The API key is deliberately not persisted.
         settings[provider] = {
             model: modelSelect.value.trim(),
-            endpoint: endpointInput.value.trim(),
-            apiKey: apiKeyInput.value.trim()
+            endpoint: endpointInput.value.trim()
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
     }
@@ -148,8 +163,8 @@
         const def = PROVIDERS[provider];
         const model = saved.model || def.model;
         setModelOptions(model ? [model] : [], model);
-        endpointInput.value = saved.endpoint || def.endpoint;
-        apiKeyInput.value = saved.apiKey || '';
+        endpointInput.value = def.needsKey ? def.endpoint : (normalizeEndpoint(saved.endpoint) || def.endpoint);
+        apiKeyInput.value = apiKeys[provider] || '';
         endpointField.hidden = def.needsKey;
         apiKeyField.hidden = !def.needsKey;
         setConnection('', '');
@@ -859,6 +874,9 @@
     checkButton.addEventListener('click', () => {
         saveSettings();
         checkConnection();
+    });
+    apiKeyInput.addEventListener('input', () => {
+        apiKeys[providerSelect.value] = apiKeyInput.value.trim();
     });
     apiKeyInput.addEventListener('change', () => {
         saveSettings();

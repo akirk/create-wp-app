@@ -542,9 +542,13 @@
             cursor: default;
         }
 
-        .stepbar .step.is-done {
+        .stepbar .step:not(:disabled) {
             color: var(--accent-strong);
             cursor: pointer;
+        }
+
+        .stepbar .step:not(:disabled):hover {
+            background: var(--surface-alt);
         }
 
         .stepbar .step.is-current {
@@ -667,7 +671,7 @@
 
         <nav class="stepbar" aria-label="Progress">
             <button type="button" class="step is-current" data-step="1"><span class="step-number">1</span> Name your app</button>
-            <button type="button" class="step" data-step="2" disabled><span class="step-number">2</span> Build with AI <span class="step-note">(optional)</span></button>
+            <button type="button" class="step" data-step="2"><span class="step-number">2</span> Build with AI <span class="step-note">(optional)</span></button>
             <button type="button" class="step" data-step="3" disabled><span class="step-number">3</span> Result</button>
         </nav>
 
@@ -750,7 +754,7 @@
                                 <button id="ai-check-button" type="button" class="secondary">Check connection</button>
                             </div>
                             <p id="ai-connection" class="ai-connection" aria-live="polite"></p>
-                            <p class="hint">Keys and settings are stored in this browser only; requests go straight to the provider, nothing passes through a server of ours.</p>
+                            <p class="hint">Your API key is sent only to the selected provider, directly from your browser — never to a server of ours — and it is not stored; you will need to enter it again next time. Provider, model and server URL are remembered in this browser.</p>
                         </div>
                         <div class="field">
                             <label for="ai-prompt">What should the app do?</label>

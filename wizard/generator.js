@@ -731,7 +731,9 @@ register_deactivation_hook( __FILE__, function() {
             const number = Number(button.dataset.step);
             button.classList.toggle('is-current', number === step);
             button.classList.toggle('is-done', number < step);
-            button.disabled = number > highestStep || number === step;
+            // Step 2 is always reachable (validation happens on the way);
+            // the result step only once it has been produced.
+            button.disabled = number === step || (number > highestStep && number !== 2);
         }
 
         if (changed) {
