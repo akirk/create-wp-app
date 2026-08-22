@@ -9,9 +9,14 @@ composer create-project akirk/create-wp-app my-plugin
 ```
 
 You can also use the static GitHub Pages generator to download a scaffolded zip
-with WpApp bundled in `vendor/`:
+with WpApp bundled in `vendor/`, or run it in an embedded WordPress Playground:
 
 https://akirk.github.io/create-wp-app/
+
+There you can optionally describe the app you want and have an LLM build it on
+top of the scaffold, right in the browser: bring your own Anthropic or OpenAI
+API key, or point it at a local Ollama / LM Studio server. The key stays in your
+browser and requests go directly to the provider.
 
 This prompts you for:
 

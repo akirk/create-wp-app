@@ -6,6 +6,7 @@
     <title>Create a WpApp</title>
     <script src="assets/jszip.min.js" defer></script>
     <script src="generator.js" defer></script>
+    <script src="ai.js" defer></script>
     <style>
         :root {
             color-scheme: light;
@@ -178,23 +179,6 @@
             padding-top: 4px;
         }
 
-        .checkbox {
-            display: flex;
-            align-items: center;
-            gap: 7px;
-            color: var(--muted);
-            font-size: 0.88rem;
-            font-weight: 500;
-            min-height: 46px;
-            white-space: nowrap;
-        }
-
-        .checkbox input {
-            width: 15px;
-            height: 15px;
-            margin: 0;
-            accent-color: var(--accent);
-        }
 
         button {
             min-height: 46px;
@@ -274,6 +258,137 @@
             font-size: 0.92rem;
         }
 
+
+        textarea,
+        select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: var(--surface);
+            color: var(--text);
+            font: inherit;
+        }
+
+        select {
+            min-height: 44px;
+        }
+
+        textarea {
+            resize: vertical;
+        }
+
+        .field-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        .ai-log {
+            display: grid;
+            gap: 6px;
+            max-height: 320px;
+            overflow: auto;
+            padding: 12px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: var(--surface-alt);
+            font-size: 0.9rem;
+        }
+
+        .ai-log:empty {
+            display: none;
+        }
+
+        .ai-log-line {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+
+        .ai-log-user {
+            font-weight: 700;
+        }
+
+        .ai-log-tool {
+            color: var(--muted);
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 0.82rem;
+        }
+
+        .ai-log-error {
+            color: var(--danger);
+        }
+
+        .files-heading {
+            margin-top: 18px;
+            padding-top: 18px;
+            border-top: 1px solid var(--line);
+        }
+
+        .ai-files {
+            display: grid;
+            gap: 4px;
+        }
+
+        .ai-files:empty::before {
+            content: "Files appear here once generated.";
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        .ai-file {
+            min-height: 0;
+            padding: 4px 8px;
+            border: 0;
+            border-radius: 4px;
+            background: transparent;
+            color: var(--accent);
+            font: inherit;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 0.82rem;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .ai-file:hover {
+            background: var(--surface-alt);
+        }
+
+        .ai-file-viewer {
+            margin-top: 12px;
+        }
+
+        .ai-file-viewer-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .ai-file-viewer pre {
+            max-height: 420px;
+            margin: 0;
+            padding: 12px;
+            overflow: auto;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: var(--surface-alt);
+            font-size: 0.8rem;
+        }
+
+        .playground-frame {
+            margin-top: 22px;
+        }
+
+        .playground-iframe {
+            width: 100%;
+            height: 85vh;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+        }
+
         @media (max-width: 820px) {
             .layout {
                 grid-template-columns: 1fr;
@@ -286,7 +401,7 @@
         <header>
             <div class="brand">
                 <h1>Create a WpApp</h1>
-                <p>Generate a WordPress plugin scaffold powered by <a href="https://github.com/akirk/wp-app">WpApp</a>, then download it or run it in WordPress Playground.</p>
+                <p>Generate a WordPress plugin scaffold powered by <a href="https://github.com/akirk/wp-app">WpApp</a>, optionally let an AI model build your app on top of it, then download it or run it in WordPress Playground — all in your browser.</p>
             </div>
         </header>
 
@@ -334,13 +449,47 @@
                         </div>
                     </fieldset>
 
+                    <fieldset>
+                        <legend>Build with AI (optional)</legend>
+                        <div class="field">
+                            <label for="ai-prompt">Describe your app</label>
+                            <textarea id="ai-prompt" name="aiPrompt" rows="4" placeholder="A reading list where I can add books with title, author and status, and see them grouped by status."></textarea>
+                            <p class="hint">The model edits the scaffold using file tools and you can send follow-up prompts to refine it. Your prompt and the plugin files go directly to the provider you choose.</p>
+                        </div>
+                        <div class="field-row">
+                            <div class="field">
+                                <label for="ai-provider">Provider</label>
+                                <select id="ai-provider" name="aiProvider">
+                                    <option value="anthropic">Anthropic</option>
+                                    <option value="openai">OpenAI</option>
+                                    <option value="local">Local (Ollama, LM Studio)</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="ai-model">Model</label>
+                                <input id="ai-model" name="aiModel" type="text" autocomplete="off">
+                            </div>
+                        </div>
+                        <div class="field" id="ai-endpoint-field" hidden>
+                            <label for="ai-endpoint">Endpoint</label>
+                            <input id="ai-endpoint" name="aiEndpoint" type="text" autocomplete="off">
+                        </div>
+                        <div class="field" id="ai-api-key-field">
+                            <label for="ai-api-key">API key</label>
+                            <input id="ai-api-key" name="aiApiKey" type="password" autocomplete="off">
+                            <p class="hint"></p>
+                        </div>
+                        <div class="actions">
+                            <button id="ai-generate-button" type="button">Generate with AI</button>
+                            <button id="ai-stop-button" class="secondary" type="button" hidden>Stop</button>
+                            <button id="ai-reset-button" class="secondary" type="button">Reset</button>
+                        </div>
+                        <div id="ai-log" class="ai-log" aria-live="polite"></div>
+                    </fieldset>
+
                     <div class="actions">
                         <button id="download-button" type="button">Download zip</button>
                         <button id="playground-button" class="secondary" type="button">Run in Playground</button>
-                        <label class="checkbox" for="install-ai-assistant">
-                            <input id="install-ai-assistant" name="installAiAssistant" type="checkbox" value="1">
-                            AI Assistant
-                        </label>
                         <output id="status" class="status" aria-live="polite"></output>
                     </div>
                 </form>
@@ -357,8 +506,19 @@
                 <div class="notes">
                     WpApp runtime files are bundled into the Pages artifact and added to your zip with a Composer-lite autoloader.
                 </div>
+                <h2 class="files-heading">Files</h2>
+                <div id="ai-files" class="ai-files"></div>
+                <div id="ai-file-viewer" class="ai-file-viewer" hidden>
+                    <div class="ai-file-viewer-head">
+                        <code id="ai-file-viewer-title"></code>
+                        <button id="ai-file-viewer-close" type="button" class="secondary">Close</button>
+                    </div>
+                    <pre id="ai-file-viewer-content"></pre>
+                </div>
             </aside>
         </main>
+
+        <section id="playground-frame" class="playground-frame" hidden></section>
     </div>
 </body>
 </html>
