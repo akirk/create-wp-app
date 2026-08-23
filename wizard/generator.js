@@ -714,6 +714,18 @@ register_deactivation_hook( __FILE__, function() {
     let highestStep = 1;
     let currentStep = 1;
 
+    // Steps ahead of the furthest one visited become clickable as soon as
+    // the form is valid, i.e. once the name fields are filled in.
+    function syncStepButtons() {
+        const formValid = form.checkValidity();
+        for (const button of stepButtons) {
+            const number = Number(button.dataset.step);
+            button.classList.toggle('is-current', number === currentStep);
+            button.classList.toggle('is-done', number < currentStep);
+            button.disabled = number === currentStep || (number > highestStep && !formValid);
+        }
+    }
+
     function goToStep(step) {
         if (step > 1 && !form.reportValidity()) {
             return false;
@@ -727,12 +739,7 @@ register_deactivation_hook( __FILE__, function() {
             panel.hidden = Number(panel.dataset.stepPanel) !== step;
         }
 
-        for (const button of stepButtons) {
-            const number = Number(button.dataset.step);
-            button.classList.toggle('is-current', number === step);
-            button.classList.toggle('is-done', number < step);
-            button.disabled = number > highestStep || number === step;
-        }
+        syncStepButtons();
 
         if (changed) {
             document.dispatchEvent(new CustomEvent('wizard:step', { detail: { step } }));
@@ -744,6 +751,8 @@ register_deactivation_hook( __FILE__, function() {
     for (const button of stepButtons) {
         button.addEventListener('click', () => goToStep(Number(button.dataset.step)));
     }
+
+    form.addEventListener('input', syncStepButtons);
 
     for (const button of document.querySelectorAll('.back-button')) {
         button.addEventListener('click', () => goToStep(Number(button.dataset.step)));
@@ -763,6 +772,7 @@ register_deactivation_hook( __FILE__, function() {
     playgroundButton.addEventListener('click', runInPlayground);
 
     syncDerivedFields();
+    syncStepButtons();
 
     // Shared with ai.js.
     window.CreateWpApp = {
