@@ -7,6 +7,7 @@ Use these rules when creating or modifying a WpApp plugin scaffold.
 - Read the generated files before modifying them.
 - Keep `__construct()` focused on creating/configuring `WpApp`, assigning storage objects, and attaching WordPress hooks.
 - Do not call `register_post_type()`, `register_taxonomy()`, `flush_rewrite_rules()`, `wp_add_dashboard_widget()`, REST route registration, or other WordPress-hooked feature registration directly from `__construct()`.
+- When a CPT or taxonomy uses `show_in_rest => true`, set its `rest_controller_class` to `\WpApp\Rest\Access::protect_post_type()` / `::protect_taxonomy()` — that gates its REST reads to the app's capability. Front-end `require_login` does not cover the REST API, so published entries are otherwise readable anonymously over `/wp/v2/<type>`. (Requires `akirk/wp-app ^1.5`.)
 - Register custom post types and taxonomies on the WordPress `init` hook.
 - Register dashboard widgets on the WordPress `wp_dashboard_setup` hook.
 - Define WpApp routes in `setup_routes()` and WpApp menu/masterbar entries in `setup_menu()`.

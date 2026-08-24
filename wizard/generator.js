@@ -18,7 +18,7 @@
         license: 'GPL-2.0-or-later',
         require: {
             php: '>=7.4',
-            'akirk/wp-app': '^1.0'
+            'akirk/wp-app': '^1.5'
         }
     };
 
@@ -216,6 +216,9 @@ class App extends BaseApp {
          *     'public'       => false,
          *     'show_ui'      => true,
          *     'show_in_rest' => true,
+         *     // Gate anonymous REST reads; front-end require_login does NOT cover
+         *     // the REST API. Requires akirk/wp-app ^1.5.
+         *     'rest_controller_class' => \WpApp\Rest\Access::protect_post_type( '{{identifier}}_item', 'read' ),
          *     'supports'     => [ 'title', 'editor', 'author' ],
          * ] );
          */
@@ -228,6 +231,7 @@ class App extends BaseApp {
          *     'hierarchical' => true,
          *     'show_ui'      => true,
          *     'show_in_rest' => true,
+         *     'rest_controller_class' => \WpApp\Rest\Access::protect_taxonomy( '{{identifier}}_category', 'read' ),
          * ] );
          */
     }
