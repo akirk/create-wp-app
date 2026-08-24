@@ -30,6 +30,11 @@
     const fileViewer = document.getElementById('ai-file-viewer');
     const fileViewerTitle = document.getElementById('ai-file-viewer-title');
     const fileViewerContent = document.getElementById('ai-file-viewer-content');
+    const fileDeleteButton = document.getElementById('ai-file-delete');
+    const newFileToggle = document.getElementById('new-file-toggle');
+    const newFileRow = document.getElementById('new-file-row');
+    const newFilePath = document.getElementById('new-file-path');
+    const newFileAdd = document.getElementById('new-file-add');
     const endpointField = document.getElementById('ai-endpoint-field');
     const apiKeyField = document.getElementById('ai-api-key-field');
 
@@ -241,6 +246,9 @@
     const fileStatus = new Map();
     let scaffoldFiles = null;
     let lastTouched = null;
+    // Files changed by hand since the model's last turn; it is told about them.
+    const manualEdits = new Set();
+    let openPath = null;
 
     function updateFileStatus(path) {
         const original = scaffoldFiles.get(path);
@@ -277,14 +285,110 @@
                 badge.textContent = status;
                 button.append(badge);
             }
-            button.addEventListener('click', () => {
-                fileViewerTitle.textContent = path;
-                fileViewerContent.textContent = files.get(path);
-                fileViewer.hidden = false;
-            });
+            button.addEventListener('click', () => openFile(path));
             fileList.append(button);
         }
     }
+
+    /* ---------- manual editing ---------- */
+
+    function isManaged(path) {
+        return path === 'vendor' || path.startsWith('vendor/');
+    }
+
+    function openFile(path) {
+        openPath = path;
+        fileViewerTitle.textContent = path;
+        fileViewerContent.value = files.get(path);
+        // vendor/ is off limits for the model too, see normalizePath().
+        fileViewerContent.readOnly = isManaged(path);
+        fileDeleteButton.hidden = isManaged(path);
+        fileViewer.hidden = false;
+        // On narrow screens the list sits below the editor.
+        fileViewer.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
+    function closeFile() {
+        openPath = null;
+        fileViewer.hidden = true;
+    }
+
+    // Keeps the editor in sync after the model changed or removed the open file.
+    function refreshOpenFile() {
+        if (!openPath) {
+            return;
+        }
+        if (!files.has(openPath)) {
+            closeFile();
+        } else if (fileViewerContent.value !== files.get(openPath)) {
+            fileViewerContent.value = files.get(openPath);
+        }
+    }
+
+    function commitManualChange(path) {
+        updateFileStatus(path);
+        manualEdits.add(path);
+        renderFiles();
+        window.CreateWpApp.setGeneratedFiles(files, config.slug);
+    }
+
+    fileViewerContent.addEventListener('input', () => {
+        if (!openPath || abortController || isManaged(openPath)) {
+            return;
+        }
+        files.set(openPath, fileViewerContent.value);
+        commitManualChange(openPath);
+    });
+
+    fileDeleteButton.addEventListener('click', () => {
+        if (!openPath || abortController) {
+            return;
+        }
+        if (!window.confirm(`Delete ${openPath}?`)) {
+            return;
+        }
+        const path = openPath;
+        files.delete(path);
+        closeFile();
+        commitManualChange(path);
+    });
+
+    newFileToggle.addEventListener('click', () => {
+        newFileRow.hidden = !newFileRow.hidden;
+        if (!newFileRow.hidden) {
+            newFilePath.focus();
+        }
+    });
+
+    function addNewFile() {
+        if (abortController) {
+            return;
+        }
+        let path;
+        try {
+            path = normalizePath(newFilePath.value);
+        } catch (error) {
+            window.CreateWpApp.setStatus(error.message, true);
+            return;
+        }
+        window.CreateWpApp.setStatus('');
+        newFilePath.value = '';
+        newFileRow.hidden = true;
+        if (!files.has(path)) {
+            files.set(path, '');
+            commitManualChange(path);
+        }
+        openFile(path);
+        fileViewerContent.focus();
+    }
+
+    newFileAdd.addEventListener('click', addNewFile);
+    newFilePath.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            addNewFile();
+        }
+    });
 
     /* ---------- tools over the in-memory file map ---------- */
 
@@ -684,7 +788,13 @@
         const systemPrompt = buildSystemPrompt(await getWpAppReadme());
 
         turnStart = messages.length;
-        messages.push({ role: 'user', content: messages.length ? prompt.trim() : buildFirstUserMessage(prompt) });
+        let content = messages.length ? prompt.trim() : buildFirstUserMessage(prompt);
+        if (manualEdits.size) {
+            const edited = [...manualEdits].sort().map((path) => (files.has(path) ? path : `${path} (deleted)`));
+            content += `\n\nNote: the user edited these files by hand since your last turn, so any contents you remember are stale. Re-read them before changing them:\n${edited.join('\n')}`;
+            manualEdits.clear();
+        }
+        messages.push({ role: 'user', content });
         appendLog('user', prompt.trim());
 
         for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
@@ -721,6 +831,7 @@
                 }
             }
             renderFiles();
+            refreshOpenFile();
             window.CreateWpApp.setGeneratedFiles(files, config.slug);
             downloadButton.title = `Snapshot after ${iteration + 1} round${iteration ? 's' : ''} of changes`;
 
@@ -737,11 +848,12 @@
         config = null;
         messages = [];
         fileStatus.clear();
+        manualEdits.clear();
         lastTouched = null;
         window.CreateWpApp.setGeneratedFiles(null, null);
         logElement.replaceChildren();
         fileList.replaceChildren();
-        fileViewer.hidden = true;
+        closeFile();
     }
 
     // Shows the result step for the given mode and seeds the file map.
@@ -821,6 +933,10 @@
         stopButton.hidden = !active;
         followupButton.hidden = active;
         followupInput.disabled = active;
+        fileViewerContent.disabled = active;
+        fileDeleteButton.disabled = active;
+        newFileToggle.disabled = active;
+        newFileAdd.disabled = active;
         // The zip can be downloaded at any time; it reflects the files so far.
         playgroundButton.disabled = active;
         for (const button of document.querySelectorAll('.stepbar .step, .back-button')) {
@@ -882,9 +998,7 @@
             generate(followupInput.value);
         }
     });
-    document.getElementById('ai-file-viewer-close').addEventListener('click', () => {
-        fileViewer.hidden = true;
-    });
+    document.getElementById('ai-file-viewer-close').addEventListener('click', closeFile);
 
     const saved = loadSettings();
     providerSelect.value = saved.provider && PROVIDERS[saved.provider] ? saved.provider : 'anthropic';
