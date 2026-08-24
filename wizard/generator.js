@@ -653,6 +653,7 @@ register_deactivation_hook( __FILE__, function() {
             link.remove();
             URL.revokeObjectURL(url);
             setStatus(`Downloaded ${config.slug}.zip`);
+            document.dispatchEvent(new CustomEvent('wizard:downloaded'));
         } catch (error) {
             setStatus(error.message, true);
         }

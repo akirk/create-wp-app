@@ -249,6 +249,8 @@
     // Files changed by hand since the model's last turn; it is told about them.
     const manualEdits = new Set();
     let openPath = null;
+    // Changes since the last zip download; leaving the page would lose them.
+    let unsavedChanges = false;
 
     function updateFileStatus(path) {
         const original = scaffoldFiles.get(path);
@@ -263,7 +265,19 @@
             fileStatus.delete(path);
         }
         lastTouched = path;
+        unsavedChanges = fileStatus.size > 0;
     }
+
+    document.addEventListener('wizard:downloaded', () => {
+        unsavedChanges = false;
+    });
+
+    window.addEventListener('beforeunload', (event) => {
+        if (unsavedChanges || abortController) {
+            event.preventDefault();
+            event.returnValue = '';
+        }
+    });
 
     function renderFiles() {
         fileList.replaceChildren();
@@ -907,6 +921,7 @@
         fileStatus.clear();
         manualEdits.clear();
         lastTouched = null;
+        unsavedChanges = false;
         window.CreateWpApp.setGeneratedFiles(null, null);
         logElement.replaceChildren();
         fileList.replaceChildren();
