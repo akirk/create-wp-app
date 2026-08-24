@@ -296,16 +296,73 @@
         return path === 'vendor' || path.startsWith('vendor/');
     }
 
+    // CodeMirror when it loaded, else the plain textarea.
+    const MODES = {
+        php: 'application/x-httpd-php',
+        html: 'htmlmixed',
+        js: 'javascript',
+        json: 'application/json',
+        css: 'css',
+        md: 'markdown',
+        xml: 'xml'
+    };
+    let syncingEditor = false;
+    const codeMirror = window.CodeMirror ? window.CodeMirror.fromTextArea(fileViewerContent, {
+        lineNumbers: true,
+        lineWrapping: false,
+        indentUnit: 4,
+        matchBrackets: true,
+        autoCloseBrackets: true,
+        viewportMargin: 20
+    }) : null;
+
+    const editor = {
+        get: () => (codeMirror ? codeMirror.getValue() : fileViewerContent.value),
+        set(value, path) {
+            syncingEditor = true;
+            if (codeMirror) {
+                codeMirror.setOption('mode', MODES[String(path).split('.').pop()] || null);
+                codeMirror.setValue(value);
+                codeMirror.clearHistory();
+            } else {
+                fileViewerContent.value = value;
+            }
+            syncingEditor = false;
+        },
+        setReadOnly(readOnly) {
+            fileViewer.classList.toggle('is-readonly', readOnly);
+            if (codeMirror) {
+                codeMirror.setOption('readOnly', readOnly);
+            } else {
+                fileViewerContent.readOnly = readOnly;
+            }
+        },
+        focus: () => (codeMirror ? codeMirror.focus() : fileViewerContent.focus()),
+        refresh: () => codeMirror && codeMirror.refresh(),
+        onChange(handler) {
+            if (codeMirror) {
+                codeMirror.on('change', () => !syncingEditor && handler());
+            } else {
+                fileViewerContent.addEventListener('input', handler);
+            }
+        }
+    };
+
+    function syncEditorLock() {
+        editor.setReadOnly(Boolean(abortController) || (openPath !== null && isManaged(openPath)));
+    }
+
     function openFile(path) {
         openPath = path;
         fileViewerTitle.textContent = path;
-        fileViewerContent.value = files.get(path);
+        editor.set(files.get(path), path);
         // vendor/ is off limits for the model too, see normalizePath().
-        fileViewerContent.readOnly = isManaged(path);
+        syncEditorLock();
         fileDeleteButton.hidden = isManaged(path);
         fileViewer.hidden = false;
+        editor.refresh();
         // On narrow screens the list sits below the editor.
-        fileViewer.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        fileViewer.scrollIntoView({ block: 'nearest' });
     }
 
     function closeFile() {
@@ -320,8 +377,8 @@
         }
         if (!files.has(openPath)) {
             closeFile();
-        } else if (fileViewerContent.value !== files.get(openPath)) {
-            fileViewerContent.value = files.get(openPath);
+        } else if (editor.get() !== files.get(openPath)) {
+            editor.set(files.get(openPath), openPath);
         }
     }
 
@@ -332,11 +389,11 @@
         window.CreateWpApp.setGeneratedFiles(files, config.slug);
     }
 
-    fileViewerContent.addEventListener('input', () => {
+    editor.onChange(() => {
         if (!openPath || abortController || isManaged(openPath)) {
             return;
         }
-        files.set(openPath, fileViewerContent.value);
+        files.set(openPath, editor.get());
         commitManualChange(openPath);
     });
 
@@ -379,7 +436,7 @@
             commitManualChange(path);
         }
         openFile(path);
-        fileViewerContent.focus();
+        editor.focus();
     }
 
     newFileAdd.addEventListener('click', addNewFile);
@@ -933,7 +990,7 @@
         stopButton.hidden = !active;
         followupButton.hidden = active;
         followupInput.disabled = active;
-        fileViewerContent.disabled = active;
+        syncEditorLock();
         fileDeleteButton.disabled = active;
         newFileToggle.disabled = active;
         newFileAdd.disabled = active;
@@ -970,6 +1027,14 @@
         if (event.detail.step === 2 && !promptEdited) {
             const name = pluginNameInput.value.trim();
             promptInput.value = name ? `Build a ${name} app.` : '';
+        }
+        // Reached via the step pill: seed the plain scaffold if there is
+        // nothing yet, or if the name/setup changed since it was built.
+        if (event.detail.step === 3) {
+            const next = window.CreateWpApp.getConfig();
+            if (!files || config.slug !== next.slug || config.setupType !== next.setupType) {
+                showResult(false);
+            }
         }
     });
     checkButton.addEventListener('click', () => {

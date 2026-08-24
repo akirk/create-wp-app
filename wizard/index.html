@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Create a WpApp</title>
     <script src="assets/jszip.min.js" defer></script>
+    <link rel="stylesheet" href="assets/codemirror/codemirror.min.css">
+    <script src="assets/codemirror/codemirror.min.js" defer></script>
+    <script src="assets/codemirror/mode/xml/xml.min.js" defer></script>
+    <script src="assets/codemirror/mode/javascript/javascript.min.js" defer></script>
+    <script src="assets/codemirror/mode/css/css.min.js" defer></script>
+    <script src="assets/codemirror/mode/htmlmixed/htmlmixed.min.js" defer></script>
+    <script src="assets/codemirror/mode/clike/clike.min.js" defer></script>
+    <script src="assets/codemirror/mode/php/php.min.js" defer></script>
+    <script src="assets/codemirror/mode/markdown/markdown.min.js" defer></script>
+    <script src="assets/codemirror/addon/edit/matchbrackets.min.js" defer></script>
+    <script src="assets/codemirror/addon/edit/closebrackets.min.js" defer></script>
     <script src="generator.js" defer></script>
     <script src="ai.js" defer></script>
     <style>
@@ -351,6 +362,7 @@
         }
 
         .ai-file-viewer {
+            min-width: 0;
             margin-top: 12px;
         }
 
@@ -378,6 +390,31 @@
         }
 
         .ai-file-viewer textarea:disabled {
+            color: var(--muted);
+        }
+
+        .ai-file-viewer .CodeMirror {
+            height: 480px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: var(--surface-alt);
+            color: var(--text);
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 0.8rem;
+            line-height: 1.45;
+        }
+
+        .ai-file-viewer .CodeMirror-gutters {
+            border-right: 1px solid var(--line);
+            background: var(--surface-alt);
+        }
+
+        .ai-file-viewer .CodeMirror-focused {
+            outline: 3px solid rgba(29, 107, 82, 0.18);
+            border-color: var(--accent);
+        }
+
+        .ai-file-viewer.is-readonly .CodeMirror {
             color: var(--muted);
         }
 
@@ -678,7 +715,7 @@
         @media (max-width: 820px) {
             .layout,
             .result-layout {
-                grid-template-columns: 1fr;
+                grid-template-columns: minmax(0, 1fr);
             }
 
             .result-side {
@@ -705,6 +742,12 @@
 
             .stepbar .step.is-current .step-note {
                 display: none;
+            }
+
+            /* Phones zoom into inputs smaller than 16px on focus. */
+            .ai-file-viewer .CodeMirror,
+            .ai-file-viewer textarea {
+                font-size: 16px;
             }
         }
     </style>
