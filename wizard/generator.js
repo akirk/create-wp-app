@@ -361,9 +361,7 @@ register_activation_hook( __FILE__, function() {
     $app->activate();
 } );
 
-register_deactivation_hook( __FILE__, function() {
-    flush_rewrite_rules();
-} );
+register_deactivation_hook( __FILE__, 'flush_rewrite_rules' );
 `;
 
     const minimalSetupCode = `add_action( 'plugins_loaded', function() {
@@ -390,13 +388,9 @@ register_deactivation_hook( __FILE__, function() {
     $app->init();
 } );
 
-register_activation_hook( __FILE__, function() {
-    flush_rewrite_rules();
-} );
+register_activation_hook( __FILE__, 'flush_rewrite_rules' );
 
-register_deactivation_hook( __FILE__, function() {
-    flush_rewrite_rules();
-} );
+register_deactivation_hook( __FILE__, 'flush_rewrite_rules' );
 `;
 
     function slugify(value) {

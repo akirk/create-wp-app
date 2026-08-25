@@ -196,13 +196,9 @@ add_action( 'plugins_loaded', function() {
     $app->init();
 } );
 
-register_activation_hook( __FILE__, function() {
-    flush_rewrite_rules();
-} );
+register_activation_hook( __FILE__, 'flush_rewrite_rules' );
 
-register_deactivation_hook( __FILE__, function() {
-    flush_rewrite_rules();
-} );
+register_deactivation_hook( __FILE__, 'flush_rewrite_rules' );
 PHP;
 
         $full_setup_code = <<<'PHP'
@@ -229,9 +225,7 @@ register_activation_hook( __FILE__, function() {
     $app->activate();
 } );
 
-register_deactivation_hook( __FILE__, function() {
-    flush_rewrite_rules();
-} );
+register_deactivation_hook( __FILE__, 'flush_rewrite_rules' );
 PHP;
 
         $replacements = [
