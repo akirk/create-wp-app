@@ -133,16 +133,15 @@ class App extends BaseApp {
         // See https://github.com/akirk/wp-app for documentation.
         $this->app = new WpApp( $this->get_template_dir(), $this->get_url_path(), [
             // Access control
-            // 'require_login'      => false,
+            // 'require_login'      => true,
             // 'require_capability' => 'read',
 
             // Masterbar
-            // 'show_masterbar_for_anonymous' => false,
+            // 'show_masterbar_for_anonymous' => true,
             // 'show_wp_logo'                 => true,
             // 'show_site_name'               => true,
-            // 'show_dark_mode_toggle'        => false,
+            // 'admin_bar_app_link'           => true,
             // 'clear_admin_bar'              => false,
-            // 'add_app_node'                 => false,
 
             // App identity
             // 'app_name'            => $this->get_plugin_name(),
@@ -371,16 +370,15 @@ register_deactivation_hook( __FILE__, function() {
     // See https://github.com/akirk/wp-app for documentation.
     $app = new \\WpApp\\WpApp( __DIR__ . '/templates', '{{url-path}}', [
         // Access control
-        // 'require_login'      => false,
+        // 'require_login'      => true,
         // 'require_capability' => 'read',
 
         // Masterbar
-        // 'show_masterbar_for_anonymous' => false,
+        // 'show_masterbar_for_anonymous' => true,
         // 'show_wp_logo'                 => true,
         // 'show_site_name'               => true,
-        // 'show_dark_mode_toggle'        => false,
+        // 'admin_bar_app_link'           => true,
         // 'clear_admin_bar'              => false,
-        // 'add_app_node'                 => false,
 
         // App identity
         // $plugin_data = get_file_data( __FILE__, [ 'name' => 'Plugin Name' ] );
