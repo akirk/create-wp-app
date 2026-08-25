@@ -55,7 +55,7 @@ class Scaffolder {
             $messages[] = "✓ Renamed plugin-name.php to $new_plugin_file";
         }
 
-        $this->write_file( $target_dir, '.gitignore', "/vendor/\n", $messages, 'Created .gitignore' );
+        $this->write_file( $target_dir, '.gitignore', self::gitignore_template(), $messages, 'Created .gitignore' );
 
         if ( ! $is_full_setup && is_dir( $this->path( $target_dir, 'src' ) ) ) {
             $this->remove_src_directory( $target_dir );
@@ -78,7 +78,7 @@ class Scaffolder {
             $messages[] = '✓ Regenerated autoloader';
         }
 
-        $readme = "# {$config['plugin_name']}\n\nA WordPress app powered by [WpApp](https://github.com/akirk/wp-app).\n";
+        $readme = str_replace( array_keys( $replacements ), array_values( $replacements ), self::readme_template() );
         $this->write_file( $target_dir, 'README.md', $readme, $messages, 'Updated README.md' );
 
         $this->cleanup_setup_files( $target_dir, $is_full_setup );
@@ -170,64 +170,35 @@ class Scaffolder {
         return true;
     }
 
+    /**
+     * The scaffold snippets live as plain files in .create-wp-app/ so that the
+     * wizard (scripts/build-wizard-templates.php) and other tools can build
+     * the same scaffold from the same source. Tokens like {{slug}} are
+     * resolved by get_replacements().
+     */
+    public static function snippet( string $name ): string {
+        $path = dirname( __DIR__ ) . DIRECTORY_SEPARATOR . '.create-wp-app' . DIRECTORY_SEPARATOR . $name;
+        $contents = file_get_contents( $path );
+        if ( $contents === false ) {
+            throw new \RuntimeException( "Missing scaffold snippet: $path" );
+        }
+
+        return $contents;
+    }
+
+    public static function setup_code_template( bool $is_full_setup ): string {
+        return rtrim( self::snippet( $is_full_setup ? 'full-setup.php' : 'minimal-setup.php' ), "\n" );
+    }
+
+    public static function readme_template(): string {
+        return self::snippet( 'README.md' );
+    }
+
+    public static function gitignore_template(): string {
+        return "/vendor/\n";
+    }
+
     private function get_replacements( array $config, bool $is_full_setup ): array {
-        $minimal_setup_code = <<<'PHP'
-add_action( 'plugins_loaded', function() {
-    // See https://github.com/akirk/wp-app for documentation.
-    $app = new \WpApp\WpApp( __DIR__ . '/templates', '{{url-path}}', [
-        // Access control
-        // 'require_login'      => true,
-        // 'require_capability' => 'read',
-
-        // Masterbar
-        // 'show_masterbar_for_anonymous' => true,
-        // 'show_wp_logo'                 => true,
-        // 'show_site_name'               => true,
-        // 'admin_bar_app_link'           => true,
-        // 'clear_admin_bar'              => false,
-
-        // App identity
-        // $plugin_data = get_file_data( __FILE__, [ 'name' => 'Plugin Name' ] );
-        // 'app_name'            => $plugin_data['name'],
-        // 'app_name_textdomain' => '{{slug}}',
-        // 'my_apps'             => true,
-        // 'my_apps_icon'        => null,
-    ] );
-    $app->init();
-} );
-
-register_activation_hook( __FILE__, 'flush_rewrite_rules' );
-
-register_deactivation_hook( __FILE__, 'flush_rewrite_rules' );
-PHP;
-
-        $full_setup_code = <<<'PHP'
-// Autoloader for plugin classes.
-spl_autoload_register( function( $class ) {
-    $prefix = '{{namespace}}\\';
-    $len = strlen( $prefix );
-    if ( strncmp( $prefix, $class, $len ) !== 0 ) {
-        return;
-    }
-    $file = __DIR__ . '/src/' . str_replace( '\\', '/', substr( $class, $len ) ) . '.php';
-    if ( file_exists( $file ) ) {
-        require $file;
-    }
-} );
-
-add_action( 'plugins_loaded', function() {
-    $app = new App();
-    $app->init();
-} );
-
-register_activation_hook( __FILE__, function() {
-    $app = new App();
-    $app->activate();
-} );
-
-register_deactivation_hook( __FILE__, 'flush_rewrite_rules' );
-PHP;
-
         $replacements = [
             '{{plugin-name}}' => $config['plugin_name'],
             '{{namespace}}' => $config['namespace'],
@@ -239,8 +210,7 @@ PHP;
             '/* CreateWpAppFullSetup */' => '',
         ];
 
-        $setup_code = $is_full_setup ? $full_setup_code : $minimal_setup_code;
-        $replacements['/* CreateWpAppFullSetup */'] = str_replace( array_keys( $replacements ), array_values( $replacements ), $setup_code );
+        $replacements['/* CreateWpAppFullSetup */'] = str_replace( array_keys( $replacements ), array_values( $replacements ), self::setup_code_template( $is_full_setup ) );
 
         return $replacements;
     }
@@ -318,7 +288,7 @@ PHP;
     }
 
     private function cleanup_setup_files( string $target_dir, bool $is_full_setup ): void {
-        foreach ( [ 'examples', 'scripts', 'skills' ] as $directory ) {
+        foreach ( [ '.create-wp-app', 'examples', 'scripts', 'skills' ] as $directory ) {
             $this->remove_directory( $this->path( $target_dir, $directory ) );
         }
 

@@ -61,6 +61,9 @@ jobs:
 
           ( cd "$runtime_dir" && zip -qr "$GITHUB_WORKSPACE/wizard/assets/wp-app.zip" . )
 
+      - name: Build wizard templates from the scaffold sources
+        run: php scripts/build-wizard-templates.php
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

@@ -13,9 +13,12 @@ with WpApp bundled in `vendor/`, or run it in an embedded WordPress Playground:
 
 https://akirk.github.io/create-wp-app/
 
-The scaffold templates the wizard uses are published as data in
-`wizard/templates.js` (`window.CreateWpAppTemplates`, a JSON object), so other
-tools can build the same scaffold from a single source.
+The scaffold has one source: `plugin-name.php`, `src/App.php`,
+`templates/index.php`, `composer.json` and the snippets in `.create-wp-app/`.
+`composer create-project` copies and fills them in; the web wizard reads them
+from `wizard/templates.js`, which `php scripts/build-wizard-templates.php`
+generates (the Pages workflow runs it, so it is not committed — run it before
+previewing the wizard locally).
 
 There you can optionally describe the app you want and have an LLM build it on
 top of the scaffold, right in the browser: bring your own Anthropic or OpenAI
