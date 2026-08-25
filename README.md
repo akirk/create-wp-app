@@ -13,6 +13,10 @@ with WpApp bundled in `vendor/`, or run it in an embedded WordPress Playground:
 
 https://akirk.github.io/create-wp-app/
 
+The scaffold templates the wizard uses are published as data in
+`wizard/templates.js` (`window.CreateWpAppTemplates`, a JSON object), so other
+tools can build the same scaffold from a single source.
+
 There you can optionally describe the app you want and have an LLM build it on
 top of the scaffold, right in the browser: bring your own Anthropic or OpenAI
 API key, or point it at a local Ollama / LM Studio server. The key stays in your
