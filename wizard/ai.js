@@ -12,6 +12,7 @@
     const skipButton = document.getElementById('skip-ai-button');
     const aiResult = document.getElementById('ai-result');
     const scaffoldResult = document.getElementById('scaffold-result');
+    const resultModel = document.getElementById('ai-result-model');
     const pluginNameInput = document.getElementById('plugin-name');
     const providerSelect = document.getElementById('ai-provider');
     const endpointInput = document.getElementById('ai-endpoint');
@@ -942,6 +943,9 @@
         }
         for (const element of document.querySelectorAll('.result-plugin-name')) {
             element.textContent = config.pluginName;
+        }
+        if (withAi) {
+            resultModel.textContent = 'Using ' + modelSelect.value + ' via ' + providerDef().label + '.';
         }
         aiResult.hidden = !withAi;
         scaffoldResult.hidden = withAi;

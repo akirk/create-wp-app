@@ -699,6 +699,10 @@
             max-height: 50vh;
         }
 
+        .ai-result-model {
+            margin-top: -8px;
+        }
+
         .field-inline textarea {
             flex: 1;
         }
@@ -868,6 +872,7 @@
                         <div class="result-main">
                             <div id="ai-result" class="ai-result" hidden>
                                 <h2>Building <span class="result-plugin-name"></span></h2>
+                                <p id="ai-result-model" class="hint ai-result-model"></p>
                                 <div id="ai-log" class="ai-log" aria-live="polite"></div>
                                 <div id="ai-busy" class="ai-busy" hidden></div>
                                 <div class="field" id="ai-followup-field">
