@@ -236,11 +236,41 @@
         busyIndicator.textContent = text;
         busyIndicator.hidden = !text;
         if (text) {
+            busyIndicator.append(busyTimer);
             logElement.append(busyIndicator);
             logElement.scrollTop = logElement.scrollHeight;
         } else {
             busyIndicator.remove();
         }
+    }
+
+    /* ---------- elapsed-time countup ---------- */
+
+    const busyTimer = document.createElement('span');
+    busyTimer.className = 'ai-busy-timer';
+    let timerStart = 0;
+    let timerInterval = null;
+
+    function formatElapsed(ms) {
+        const total = Math.floor(ms / 1000);
+        const minutes = Math.floor(total / 60);
+        const seconds = total % 60;
+        return minutes ? `${minutes}:${String(seconds).padStart(2, '0')}` : `${seconds}s`;
+    }
+
+    function startTimer() {
+        timerStart = Date.now();
+        busyTimer.textContent = formatElapsed(0);
+        timerInterval = setInterval(() => {
+            busyTimer.textContent = formatElapsed(Date.now() - timerStart);
+        }, 1000);
+    }
+
+    // Stops the countup and returns the elapsed time as text.
+    function stopTimer() {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        return formatElapsed(Date.now() - timerStart);
     }
 
     // path → 'new' | 'modified' | 'deleted', compared with the plain scaffold.
@@ -981,11 +1011,11 @@
         try {
             await runAgent(prompt);
             followupInput.value = '';
-            appendLog('done', 'Finished. Download the zip or run it in Playground, or send another prompt to refine.');
+            appendLog('done', `Finished in ${stopTimer()}. Download the zip or run it in Playground, or send another prompt to refine.`);
             window.CreateWpApp.setStatus('');
         } catch (error) {
             if (error.name === 'AbortError') {
-                appendLog('error', 'Stopped. File changes made so far are kept; the interrupted turn is dropped from the conversation.');
+                appendLog('error', `Stopped after ${stopTimer()}. File changes made so far are kept; the interrupted turn is dropped from the conversation.`);
                 messages.length = turnStart;
             } else {
                 appendLog('error', error.message);
@@ -999,6 +1029,11 @@
 
     // Lock everything that must not change mid-run and show progress.
     function setGenerating(active) {
+        if (active) {
+            startTimer();
+        } else if (timerInterval) {
+            stopTimer();
+        }
         setBusy(active ? 'Starting…' : '');
         if (!active) {
             downloadButton.title = '';
