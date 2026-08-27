@@ -780,7 +780,7 @@
         const path = /"path"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(partialJson);
         const content = /"content"\s*:\s*"/.exec(partialJson);
         const size = content ? partialJson.length - content.index - content[0].length : partialJson.length;
-        line.textContent = `${name}${path ? ` ${path[1]}` : ''}${size ? ` (${formatTokens(size)} chars)` : ''}`;
+        line.textContent = `${name}${path ? ` ${path[1]}` : ''}${size ? ` (${size} chars)` : ''}`;
         logElement.scrollTop = logElement.scrollHeight;
     }
 
