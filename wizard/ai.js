@@ -670,43 +670,48 @@
         return readmeCache;
     }
 
+    // Only the README sections that describe the API; the rest is for humans.
+    function readmeExcerpt(readme) {
+        const sections = [];
+        for (const heading of ['## Quick Start', '### App-scoped assets']) {
+            const start = readme.indexOf(heading);
+            if (start === -1) {
+                continue;
+            }
+            const next = readme.slice(start + heading.length).search(/\n#{1,3} /);
+            sections.push(readme.slice(start, next === -1 ? undefined : start + heading.length + next).trim());
+        }
+        return sections.join('\n\n');
+    }
+
     function buildSystemPrompt(readme, config) {
         const parts = [
-            `You are building a WordPress plugin that is an "app" powered by the WpApp library (akirk/wp-app). The plugin lives in wp-content/plugins/${config.slug}/ and is already scaffolded; your job is to turn it into the app the user describes by editing files with the provided tools.`,
+            `You are building a WordPress plugin that is an "app" powered by the WpApp library (akirk/wp-app). The plugin lives in wp-content/plugins/${config.slug}/ and is already scaffolded; turn it into the app the user describes by editing files with the provided tools.`,
             '',
-            'Scope: build the smallest version that does what the user asked, and nothing more. This is a first draft the user will refine with follow-up prompts, and every extra feature costs them minutes of waiting.',
-            '- Implement only what the prompt asks for. No REST routes, WordPress Abilities, dashboard widgets, settings screens, categories, import/export or admin pages unless the user asked for them.',
-            '- Prefer few, focused files. Keep PHP files under roughly 200 lines; a template should be a page, not a framework. A few dozen lines of CSS on top of the WpApp defaults is usually enough.',
-            '- Do not rewrite README.md, composer.json or .gitignore unless asked.',
-            '- Once the core flow works, stop. Finish with a summary of at most one short paragraph plus a list of the routes; do not enumerate every file.',
+            'Scope: build the smallest version that does what the user asked. This is a first draft the user will refine with follow-up prompts; every extra feature costs them minutes of waiting.',
+            '- Only what the prompt asks for: no REST routes, Abilities, dashboard widgets, settings screens, import/export or admin pages unless requested.',
+            '- Few, focused files; PHP files under roughly 200 lines; a few dozen lines of CSS on top of the WpApp defaults.',
+            '- Leave README.md, composer.json, .gitignore and the plugin header alone.',
+            '- When the core flow works, stop and reply with one short paragraph plus the list of routes. Do not ask questions; state assumptions in the summary.',
             '',
             'Plugin facts:',
-            `- Plugin name: ${config.pluginName}`,
-            `- Slug / text domain / folder: ${config.slug}`,
-            `- PHP namespace: ${config.namespace}`,
+            `- Name: ${config.pluginName}; slug / text domain / folder: ${config.slug}; PHP namespace: ${config.namespace}`,
             `- App URL path: /${config.urlPath}/ (routes are relative to it)`,
-            `- Setup type: ${config.setupType} (${config.setupType === 'full' ? 'src/App.php extends WpApp\\BaseApp; put app logic there and in templates/' : 'WpApp is configured inline in the main plugin file'})`,
-            '- WpApp is available as vendor/akirk/wp-app with a working autoloader in vendor/autoload.php. Do not touch vendor/. Do not run or reference Composer.',
-            '- There is no build step: write plain PHP, CSS and vanilla JavaScript. Put assets under assets/ and enqueue them with plugin_dir_url().',
+            `- ${config.setupType === 'full' ? 'src/App.php extends WpApp\\BaseApp: app logic goes there and in templates/' : 'WpApp is configured inline in the main plugin file'}`,
+            '- vendor/autoload.php works; vendor/ is read-only and Composer is not available. No build step: plain PHP, CSS and vanilla JavaScript under assets/, enqueued with plugin_dir_url().',
             '',
-            'Rules:',
-            '- The scaffold files are included in the first message; do not read them again. The WpApp library sources under vendor/akirk/wp-app/ can be read (read_file) whenever the README leaves an API question open; they cannot be changed.',
-            '- Batch your work: when several files do not depend on each other, emit all the write_file calls in a single response instead of one per turn. Write a file once, complete; avoid follow-up edit_file rounds on files you just wrote.',
-            '- Keep __construct() limited to configuring WpApp, assigning properties and adding hooks. Register post types, taxonomies, rewrite rules, shortcodes, blocks on init; REST routes on rest_api_init; dashboard widgets on wp_dashboard_setup; admin menus on admin_menu. Never register those directly in the constructor.',
-            '- Define WpApp routes in setup_routes() and menu entries in setup_menu(). Each route maps to a template in templates/.',
-            '- Flush rewrite rules only on activation and deactivation.',
-            '- List every post type and taxonomy the app registers in the post_types / taxonomies WpApp options. require_login only covers the front end, not /wp-json/; for types registered with show_in_rest => true (set that yourself; declaring never turns it on) this gates REST reads with the app capability, so register_post_type()/register_taxonomy() need no rest_controller_class. Use launcher / app_icon (not my_apps) for launcher integration.',
-            '- If you register WordPress Abilities: one ability per verb-noun, description says what is returned and what to do on failure, every property described, additionalProperties false on inputs, output_schema present, list-* abilities paged, annotations (readonly/destructive/idempotent) accurate, failures as WP_Error with stable codes, permission_callback reusing the app capability.',
-            '- Prefer WordPress-native storage: custom post types and post meta for records, taxonomies for shared labels, user meta for per-user settings, options for small site-wide settings. Use custom tables and BaseStorage only when those do not fit; then create tables on activation. BaseStorage::get_schema() returns [ unprefixed_table => "column definitions" ]; create_tables() adds the prefix, CREATE TABLE and charset.',
-            '- Escape all output (esc_html, esc_attr, esc_url, wp_kses_post), verify nonces and capabilities on every write, and use $wpdb->prepare for custom SQL.',
-            '- Use WpApp CSS variables (--wp-app-color-primary, --wp-app-color-background, --wp-app-color-surface, --wp-app-color-text, --wp-app-color-muted, --wp-app-color-border, --wp-app-color-link, --wp-app-color-focus, ...) instead of hard-coded colours so the app follows the admin colour scheme.',
-            '- Write complete, working files. Every PHP file must be syntactically valid; double check braces, semicolons and string quoting because there is no linter here.',
-            '- Keep the plugin header in the main plugin file intact.',
-            '- Work until the app is functional end to end, then reply with a short summary of what you built and how to use it. Do not ask questions; make reasonable assumptions and mention them in the summary.'
+            'Working:',
+            '- The scaffold files are in the first message; do not read them again. Its comments document the WpApp options and extension points; follow them. Read vendor/akirk/wp-app/src/ when a library API is unclear.',
+            '- Emit all independent write_file calls in one response. Write each file once, complete and syntactically valid; there is no linter.',
+            '- Register post types, taxonomies and hooks on init, not in the constructor; routes in setup_routes(), menu entries in setup_menu(); flush rewrite rules only on (de)activation.',
+            '- Prefer post types, post meta, taxonomies and user meta over custom tables.',
+            '- Escape all output, verify nonces and capabilities on every write, use $wpdb->prepare for SQL.',
+            '- Use the --wp-app-color-* CSS variables instead of hard-coded colours.'
         ];
 
-        if (readme) {
-            parts.push('', '--- WpApp documentation (README.md) ---', '', readme);
+        const excerpt = readme ? readmeExcerpt(readme) : '';
+        if (excerpt) {
+            parts.push('', '--- WpApp README (excerpt) ---', '', excerpt);
         }
 
         return parts.join('\n');
