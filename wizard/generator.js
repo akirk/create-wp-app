@@ -143,6 +143,14 @@
         generatedSlug = slug;
     }
 
+    // ai.js registers a function returning the build transcript, if any, as
+    // { json, markdown }. The download adds it next to the plugin folder.
+    let transcriptSource = null;
+
+    function setTranscriptSource(source) {
+        transcriptSource = source;
+    }
+
     function getCurrentFiles(config) {
         if (generatedFiles && generatedSlug === config.slug) {
             return generatedFiles;
@@ -253,6 +261,14 @@
         status.textContent = message;
     }
 
+    // Local date and time, e.g. 2026-08-27-1702, so repeated downloads while
+    // refining an app do not overwrite each other.
+    function timestamp() {
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+    }
+
     async function downloadZip() {
         if (!form.reportValidity()) {
             return;
@@ -270,16 +286,22 @@
         try {
             setStatus('Building zip...');
             const zip = await buildZip(config, getCurrentFiles(config));
+            const transcript = transcriptSource?.();
+            if (transcript) {
+                zip.file(`${config.slug}-transcript.json`, transcript.json);
+                zip.file(`${config.slug}-transcript.md`, transcript.markdown);
+            }
             const blob = await zip.generateAsync({ type: 'blob' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `${config.slug}.zip`;
+            const filename = `${config.slug}-${timestamp()}.zip`;
+            link.download = filename;
             document.body.append(link);
             link.click();
             link.remove();
             URL.revokeObjectURL(url);
-            setStatus(`Downloaded ${config.slug}.zip`);
+            setStatus(`Downloaded ${filename}`);
             document.dispatchEvent(new CustomEvent('wizard:downloaded'));
         } catch (error) {
             setStatus(error.message, true);
@@ -414,6 +436,7 @@
         getConfig,
         buildFiles,
         setGeneratedFiles,
+        setTranscriptSource,
         setStatus,
         runInPlayground,
         goToStep,
