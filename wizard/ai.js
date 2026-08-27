@@ -134,6 +134,15 @@
     let messages = [];
     let abortController = null;
     let turnStart = 0;
+    // Structured record of everything the log shows, for the transcript
+    // files in the download: what the model thought, called and said, with
+    // timings. `messages` above is the raw API conversation.
+    let transcript = [];
+    let runs = [];
+
+    function record(entry) {
+        transcript.push(entry);
+    }
 
     /* ---------- settings ---------- */
 
@@ -827,6 +836,7 @@
             return;
         }
         const ms = Date.now() - state.started;
+        record({ type: 'thinking', text: state.text, ms });
         state.summary.textContent = `Thought for ${ms < 10000 ? `${(ms / 1000).toFixed(1)}s` : formatElapsed(ms)}`;
         state.line.classList.add('is-done');
         state.line.open = false;
@@ -1181,6 +1191,97 @@
         return results.map((result) => ({ role: 'tool', tool_call_id: result.id, content: result.output }));
     }
 
+    /* ---------- transcript export ---------- */
+
+    function shortMs(ms) {
+        return ms < 10000 ? `${(ms / 1000).toFixed(1)}s` : formatElapsed(ms);
+    }
+
+    // A code fence that cannot be closed early by the text inside it.
+    function fence(text, lang = '') {
+        const longest = Math.max(2, ...[...String(text).matchAll(/`+/g)].map((m) => m[0].length));
+        const ticks = '`'.repeat(longest + 1);
+        return `${ticks}${lang}\n${text}\n${ticks}`;
+    }
+
+    function fenceLang(path) {
+        const ext = String(path || '').split('.').pop();
+        return { php: 'php', js: 'javascript', css: 'css', md: 'markdown', json: 'json', html: 'html' }[ext] || '';
+    }
+
+    function quote(text) {
+        return String(text).trim().split('\n').map((line) => `> ${line}`).join('\n');
+    }
+
+    function transcriptMeta() {
+        return {
+            generator: 'create-wp-app',
+            createdAt: new Date().toISOString(),
+            plugin: { name: config?.name, slug: config?.slug },
+            provider: { id: providerSelect.value, label: providerDef().label, endpoint: baseUrl(), model: modelSelect.value.trim(), api: providerDef().api, effort: effort() || null },
+            systemPrompt: config ? buildSystemPrompt(config) : null,
+            runs
+        };
+    }
+
+    function transcriptJson() {
+        return JSON.stringify({ ...transcriptMeta(), log: transcript, messages }, null, 2);
+    }
+
+    function transcriptMarkdown() {
+        const meta = transcriptMeta();
+        const out = [`# ${meta.plugin.name} — build transcript`, ''];
+        out.push(`Generated ${meta.createdAt} by create-wp-app with ${meta.provider.model} via ${meta.provider.label}${meta.provider.effort ? ` (reasoning effort: ${meta.provider.effort})` : ''}.`, '');
+        if (meta.systemPrompt) {
+            out.push('## System prompt', '', fence(meta.systemPrompt, 'text'), '');
+        }
+        out.push('## Conversation', '');
+        for (const entry of transcript) {
+            switch (entry.type) {
+                case 'user':
+                    out.push(`### User · ${entry.at}`, '', entry.text, '');
+                    break;
+                case 'thinking':
+                    out.push(`**Thought for ${shortMs(entry.ms)}**`, '', quote(entry.text), '');
+                    break;
+                case 'tool': {
+                    const time = entry.ms ? ` · ${shortMs(entry.ms)}` : '';
+                    out.push(`**${describeToolCall(entry.name, entry.input)}**${time}`, '');
+                    if (entry.name === 'write_file') {
+                        out.push(fence(entry.input.content ?? '', fenceLang(entry.input.path)), '');
+                    } else if (entry.name === 'edit_file') {
+                        out.push('Replace:', '', fence(entry.input.old_string ?? ''), '', 'with:', '', fence(entry.input.new_string ?? ''), '');
+                    }
+                    if (entry.error) {
+                        out.push(`Error: ${entry.output}`, '');
+                    } else if (entry.name === 'list_files' || entry.name === 'read_file') {
+                        out.push(fence(entry.output, entry.name === 'read_file' ? fenceLang(entry.input.path) : ''), '');
+                    } else {
+                        out.push(`→ ${entry.output}`, '');
+                    }
+                    break;
+                }
+                case 'assistant':
+                    out.push('**Assistant**', '', entry.text, '');
+                    break;
+                case 'turn': {
+                    const cached = entry.input ? Math.round((entry.cached / entry.input) * 100) : 0;
+                    out.push(`_Turn ${entry.n} · ${shortMs(entry.ms)} · ${formatTokens(entry.input)} input (${cached}% cached) · ${formatTokens(entry.output)} output_`, '');
+                    break;
+                }
+                case 'done':
+                    out.push(`_${entry.text}_`, '');
+                    break;
+                case 'error':
+                    out.push(`_Error: ${entry.text}_`, '');
+                    break;
+            }
+        }
+        return out.join('\n');
+    }
+
+    window.CreateWpApp.setTranscriptSource(() => (transcript.length ? { json: transcriptJson(), markdown: transcriptMarkdown() } : null));
+
     /* ---------- agent loop ---------- */
 
     async function runAgent(prompt) {
@@ -1201,12 +1302,18 @@
         }
         messages.push({ role: 'user', content });
         appendLog('user', prompt.trim());
+        record({ type: 'user', text: prompt.trim(), at: new Date().toISOString() });
 
         for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
             setBusy('Thinking…');
+            const before = { ...usage, at: Date.now() };
             const result = await call(systemPrompt, messages, abortController.signal);
             usage.turns++;
             messages.push(result.assistantMessage);
+            if (result.text) {
+                record({ type: 'assistant', text: result.text });
+            }
+            record({ type: 'turn', n: usage.turns, ms: Date.now() - before.at, input: usage.input - before.input, cached: usage.cached - before.cached, output: usage.output - before.output, stopReason: result.stopReason });
 
             if (!result.toolCalls.length) {
                 if (result.stopReason === 'max_tokens' || result.stopReason === 'length') {
@@ -1237,11 +1344,14 @@
                     line.append(time);
                 }
                 try {
-                    results.push({ id: toolCall.id, output: runTool(toolCall.name, toolCall.input) });
+                    const output = runTool(toolCall.name, toolCall.input);
+                    results.push({ id: toolCall.id, output });
+                    record({ type: 'tool', name: toolCall.name, input: toolCall.input, ms: toolCall.ms || 0, output });
                 } catch (error) {
                     line.append(` — ${error.message}`);
                     line.classList.add('ai-log-error');
                     results.push({ id: toolCall.id, output: `Error: ${error.message}`, isError: true });
+                    record({ type: 'tool', name: toolCall.name, input: toolCall.input, ms: toolCall.ms || 0, output: error.message, error: true });
                 }
             }
             renderFiles();
@@ -1254,12 +1364,15 @@
         }
 
         appendLog('error', `Stopped after ${MAX_ITERATIONS} tool rounds. Send a follow-up prompt to continue.`);
+        record({ type: 'error', text: `Stopped after ${MAX_ITERATIONS} tool rounds.` });
     }
 
     function resetConversation() {
         files = null;
         scaffoldFiles = null;
         config = null;
+        transcript = [];
+        runs = [];
         messages = [];
         fileStatus.clear();
         manualEdits.clear();
@@ -1324,14 +1437,21 @@
             await runAgent(prompt);
             followupInput.value = '';
             const cached = usage.input ? Math.round((usage.cached / usage.input) * 100) : 0;
-            appendLog('done', `Finished in ${stopTimer()} · ${usage.turns} turn${usage.turns === 1 ? '' : 's'} · ${formatTokens(usage.input)} input tokens (${cached}% cached) · ${formatTokens(usage.output)} output. Download the zip or run it in Playground, or send another prompt to refine.`);
+            const summary = `Finished in ${stopTimer()} · ${usage.turns} turn${usage.turns === 1 ? '' : 's'} · ${formatTokens(usage.input)} input tokens (${cached}% cached) · ${formatTokens(usage.output)} output.`;
+            appendLog('done', `${summary} Download the zip or run it in Playground, or send another prompt to refine.`);
+            record({ type: 'done', text: summary });
+            runs.push({ prompt: prompt.trim(), startedAt: new Date(timerStart).toISOString(), ms: Date.now() - timerStart, status: 'finished', ...usage });
             window.CreateWpApp.setStatus('');
         } catch (error) {
             if (error.name === 'AbortError') {
                 appendLog('error', `Stopped after ${stopTimer()}. File changes made so far are kept; the interrupted turn is dropped from the conversation.`);
+                record({ type: 'error', text: 'Stopped by the user; the interrupted turn is dropped from the conversation.' });
+                runs.push({ prompt: prompt.trim(), startedAt: new Date(timerStart).toISOString(), ms: Date.now() - timerStart, status: 'stopped', ...usage });
                 messages.length = turnStart;
             } else {
                 appendLog('error', error.message);
+                record({ type: 'error', text: error.message });
+                runs.push({ prompt: prompt.trim(), startedAt: new Date(timerStart).toISOString(), ms: Date.now() - timerStart, status: 'error', ...usage });
                 window.CreateWpApp.setStatus(error.message, true);
             }
         } finally {
