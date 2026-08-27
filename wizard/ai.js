@@ -38,10 +38,6 @@
     const newFileAdd = document.getElementById('new-file-add');
     const endpointField = document.getElementById('ai-endpoint-field');
     const apiKeyField = document.getElementById('ai-api-key-field');
-    const effortSelect = document.getElementById('ai-effort');
-    const effortField = document.getElementById('ai-effort-field');
-    const fastCheckbox = document.getElementById('ai-fast');
-    const fastField = document.getElementById('ai-fast-field');
 
     // `endpoint` is the API base URL. Chat and model-list paths hang off it.
     const PROVIDERS = {
@@ -53,8 +49,7 @@
             chatPath: '/v1/messages',
             modelsPath: '/v1/models',
             api: 'anthropic',
-            effort: true,
-            fast: true
+            effort: true
         },
         openai: {
             label: 'OpenAI',
@@ -110,12 +105,12 @@
         return (endpointInput.value.trim() || providerDef().endpoint).replace(/\/+$/, '');
     }
 
-    function fastMode() {
-        return Boolean(providerDef().fast && fastCheckbox.checked);
-    }
+    // Fixed at medium: in measured runs it builds a working first version
+    // in a fraction of the time of high, and follow-up prompts refine it.
+    const EFFORT = 'medium';
 
     function effort() {
-        return providerDef().effort ? effortSelect.value : '';
+        return providerDef().effort ? EFFORT : '';
     }
 
     function authHeaders() {
@@ -124,8 +119,7 @@
             return {
                 'x-api-key': apiKey,
                 'anthropic-version': '2023-06-01',
-                'anthropic-dangerous-direct-browser-access': 'true',
-                ...(fastMode() ? { 'anthropic-beta': 'fast-mode-2026-02-01' } : {})
+                'anthropic-dangerous-direct-browser-access': 'true'
             };
         }
         return apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
@@ -158,9 +152,7 @@
         settings[provider] = {
             model: modelSelect.value.trim(),
             endpoint: endpointInput.value.trim(),
-            apiKey: apiKeyInput.value.trim(),
-            effort: effortSelect.value,
-            fast: fastCheckbox.checked
+            apiKey: apiKeyInput.value.trim()
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
     }
@@ -174,12 +166,8 @@
         setModelOptions(model ? [model] : [], model);
         endpointInput.value = saved.endpoint || def.endpoint;
         apiKeyInput.value = saved.apiKey || '';
-        effortSelect.value = saved.effort || 'medium';
-        fastCheckbox.checked = Boolean(saved.fast);
         endpointField.hidden = def.needsKey;
         apiKeyField.hidden = !def.needsKey;
-        effortField.hidden = !def.effort;
-        fastField.hidden = !def.fast;
         setConnection('', '');
         if (!def.needsKey || apiKeyInput.value) {
             checkConnection();
@@ -852,9 +840,6 @@
         if (effort()) {
             body.output_config = { effort: effort() };
         }
-        if (fastMode()) {
-            body.speed = 'fast';
-        }
         const response = await fetch(baseUrl() + providerDef().chatPath, {
             method: 'POST',
             signal,
@@ -1291,8 +1276,6 @@
         checkConnection();
     });
     modelSelect.addEventListener('change', saveSettings);
-    effortSelect.addEventListener('change', saveSettings);
-    fastCheckbox.addEventListener('change', saveSettings);
     stopButton.addEventListener('click', () => abortController?.abort());
     promptInput.addEventListener('keydown', (event) => {
         if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {

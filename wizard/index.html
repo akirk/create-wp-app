@@ -472,14 +472,6 @@
             white-space: nowrap;
         }
 
-        .checkbox-label {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
         .ai-log-tool.is-streaming::after {
             content: '…';
         }
@@ -898,21 +890,6 @@
                             </div>
                             <p id="ai-connection" class="ai-connection" aria-live="polite"></p>
                             <p class="hint">Keys and settings are stored in this browser only; requests go straight to the provider, nothing passes through a server of ours.</p>
-                        </div>
-                        <div class="field-row" id="ai-tuning">
-                            <div class="field" id="ai-effort-field">
-                                <label for="ai-effort">Effort</label>
-                                <select id="ai-effort" name="aiEffort">
-                                    <option value="low">Low – fastest</option>
-                                    <option value="medium" selected>Medium</option>
-                                    <option value="high">High – most thorough</option>
-                                </select>
-                                <p class="hint">How much the model thinks between steps. Medium is plenty for a first version.</p>
-                            </div>
-                            <div class="field" id="ai-fast-field">
-                                <label class="checkbox-label"><input id="ai-fast" name="aiFast" type="checkbox"> Fast mode</label>
-                                <p class="hint">Streams output up to 2.5× faster at twice the price. Opus models only.</p>
-                            </div>
                         </div>
                         <div class="field">
                             <label for="ai-prompt">What should the app do?</label>
