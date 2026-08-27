@@ -712,13 +712,8 @@
         return parts.join('\n');
     }
 
-    // The <details> on step 2 shows the exact prompt the model will get.
+    // The <details> above the build log shows the exact prompt in use.
     const systemPromptView = document.getElementById('ai-system-prompt');
-
-    async function renderSystemPrompt() {
-        const readme = await getWpAppReadme();
-        systemPromptView.textContent = buildSystemPrompt(readme, window.CreateWpApp.getConfig());
-    }
 
     function buildFirstUserMessage(prompt) {
         const listing = runTool('list_files', {});
@@ -1045,6 +1040,7 @@
         const toolResults = api === 'anthropic' ? toolResultsAnthropic : toolResultsOpenAI;
         const [readme] = await Promise.all([getWpAppReadme(), loadVendorFiles()]);
         const systemPrompt = buildSystemPrompt(readme, config);
+        systemPromptView.textContent = systemPrompt;
         Object.assign(usage, { turns: 0, input: 0, cached: 0, output: 0 });
 
         turnStart = messages.length;
@@ -1250,9 +1246,6 @@
         if (event.detail.step === 2 && !promptEdited) {
             const name = pluginNameInput.value.trim();
             promptInput.value = name ? `Build a ${name} app.` : '';
-        }
-        if (event.detail.step === 2) {
-            renderSystemPrompt();
         }
         // Reached via the step pill: seed the plain scaffold if there is
         // nothing yet, or if the name/setup changed since it was built.
