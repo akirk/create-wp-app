@@ -3,7 +3,6 @@
 // result feeds the existing zip download and Playground flows in generator.js.
 (function() {
     const STORAGE_KEY = 'create-wp-app-ai';
-    const WP_APP_README_URL = 'https://raw.githubusercontent.com/akirk/wp-app/main/README.md';
     const MAX_ITERATIONS = 60;
 
     const promptInput = document.getElementById('ai-prompt');
@@ -130,7 +129,6 @@
     let config = null;
     let messages = [];
     let abortController = null;
-    let readmeCache = null;
     let turnStart = 0;
 
     /* ---------- settings ---------- */
@@ -569,7 +567,7 @@
                 }
             }
         } catch (error) {
-            // Without the sources the model still has the README.
+            // The model can still build from the scaffold alone.
         }
         return vendorFiles;
     }
@@ -657,34 +655,7 @@
 
     /* ---------- prompt ---------- */
 
-    async function getWpAppReadme() {
-        if (readmeCache !== null) {
-            return readmeCache;
-        }
-        try {
-            const response = await fetch(WP_APP_README_URL);
-            readmeCache = response.ok ? await response.text() : '';
-        } catch (error) {
-            readmeCache = '';
-        }
-        return readmeCache;
-    }
-
-    // Only the README sections that describe the API; the rest is for humans.
-    function readmeExcerpt(readme) {
-        const sections = [];
-        for (const heading of ['## Quick Start', '### App-scoped assets']) {
-            const start = readme.indexOf(heading);
-            if (start === -1) {
-                continue;
-            }
-            const next = readme.slice(start + heading.length).search(/\n#{1,3} /);
-            sections.push(readme.slice(start, next === -1 ? undefined : start + heading.length + next).trim());
-        }
-        return sections.join('\n\n');
-    }
-
-    function buildSystemPrompt(readme, config) {
+    function buildSystemPrompt(config) {
         const parts = [
             `You are building a WordPress plugin that is an "app" powered by the WpApp library (akirk/wp-app). The plugin lives in wp-content/plugins/${config.slug}/ and is already scaffolded; turn it into the app the user describes by editing files with the provided tools.`,
             '',
@@ -698,7 +669,7 @@
             `- Name: ${config.pluginName}; slug / text domain / folder: ${config.slug}; PHP namespace: ${config.namespace}`,
             `- App URL path: /${config.urlPath}/ (routes are relative to it)`,
             `- ${config.setupType === 'full' ? 'src/App.php extends WpApp\\BaseApp: app logic goes there and in templates/' : 'WpApp is configured inline in the main plugin file'}`,
-            '- vendor/autoload.php works; vendor/ is read-only and Composer is not available. No build step: plain PHP, CSS and vanilla JavaScript under assets/, enqueued with plugin_dir_url().',
+            '- vendor/autoload.php works; vendor/ is read-only and Composer is not available. No build step: plain PHP, CSS and vanilla JavaScript under assets/.',
             '',
             'Working:',
             '- The scaffold files are in the first message; do not read them again. Its comments document the WpApp options and extension points; follow them. Read vendor/akirk/wp-app/src/ when a library API is unclear.',
@@ -706,13 +677,9 @@
             '- Register post types, taxonomies and hooks on init, not in the constructor; routes in setup_routes(), menu entries in setup_menu(); flush rewrite rules only on (de)activation.',
             '- Prefer post types, post meta, taxonomies and user meta over custom tables.',
             '- Escape all output, verify nonces and capabilities on every write, use $wpdb->prepare for SQL.',
+            '- Enqueue assets from the template with wp_app_enqueue_style() / wp_app_enqueue_script() (same arguments as the wp_ versions, plugin_dir_url() for the src) so they stay scoped to this app.',
             '- Use the --wp-app-color-* CSS variables instead of hard-coded colours.'
         ];
-
-        const excerpt = readme ? readmeExcerpt(readme) : '';
-        if (excerpt) {
-            parts.push('', '--- WpApp README (excerpt) ---', '', excerpt);
-        }
 
         return parts.join('\n');
     }
@@ -1043,8 +1010,8 @@
         const api = providerDef().api;
         const call = api === 'anthropic' ? callAnthropic : callOpenAI;
         const toolResults = api === 'anthropic' ? toolResultsAnthropic : toolResultsOpenAI;
-        const [readme] = await Promise.all([getWpAppReadme(), loadVendorFiles()]);
-        const systemPrompt = buildSystemPrompt(readme, config);
+        await loadVendorFiles();
+        const systemPrompt = buildSystemPrompt(config);
         systemPromptView.textContent = systemPrompt;
         Object.assign(usage, { turns: 0, input: 0, cached: 0, output: 0 });
 
