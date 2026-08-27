@@ -216,9 +216,11 @@ The polyfill intentionally implements only the runtime pieces this scaffold need
 
 Generated apps include lifecycle extension points. Do not register post types, taxonomies, rewrite rules, dashboard widgets, REST routes, or other WordPress-hooked features directly inside `__construct()`; attach WordPress hooks there and run registration from the proper hook.
 
-Prefer custom post types, post meta, taxonomies, terms, term meta, and user meta before custom tables. Use custom tables and `BaseStorage` only when native WordPress storage does not fit.
+Declare the post types and taxonomies the app registers in the `post_types` / `taxonomies` WpApp options. `require_login` only gates the front end; for types registered with `show_in_rest => true` (set that yourself; declaring never turns it on), declaring them gates their REST reads with the app's capability and injects the gated controller, so `register_post_type()` needs no `rest_controller_class`. Use `launcher` / `app_icon` for My Apps and OpenStation integration.
 
-For AI Assistant integrations, register focused WordPress Abilities with strict input/output schemas and annotations, then add `ai_assistant_ability_domains` and `ai_assistant_ability_instructions` filters when they help the assistant discover or present app-specific actions. See https://github.com/akirk/ai-assistant/blob/main/docs/plugin-integration.md for further guidance.
+Prefer custom post types, post meta, taxonomies, terms, term meta, and user meta before custom tables. Use custom tables and `BaseStorage` only when native WordPress storage does not fit; `get_schema()` is keyed by unprefixed table name and holds column definitions only.
+
+Register focused WordPress Abilities so assistants, automation and other apps can use the app without reading its code: one ability per verb-noun, descriptions that say what comes back and what to do on failure, every property described, `output_schema` present, paged `list-*` abilities, accurate `readonly`/`destructive`/`idempotent` annotations, `WP_Error` failures, and a `permission_callback` that reuses the app's capability. See [wp-app's abilities guide](https://github.com/akirk/wp-app/blob/main/docs/abilities.md) and the [AI Assistant plugin integration docs](https://github.com/akirk/ai-assistant/blob/main/docs/plugin-integration.md).
 
 After modifying PHP, run a syntax or runtime check before navigating the app.
 
