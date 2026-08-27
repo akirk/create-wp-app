@@ -802,15 +802,123 @@
         return line;
     }
 
+    // Shows the size from the first delta so slow models visibly make
+    // progress, and the path as soon as it has arrived.
     function updateToolLine(line, name, partialJson) {
         const path = /"path"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(partialJson);
-        if (!path) {
+        const content = /"content"\s*:\s*"/.exec(partialJson);
+        const size = content ? partialJson.length - content.index - content[0].length : partialJson.length;
+        line.textContent = `${name}${path ? ` ${path[1]}` : ''}${size ? ` (${formatTokens(size)} chars)` : ''}`;
+        logElement.scrollTop = logElement.scrollHeight;
+    }
+
+    // A collapsible log line that streams the model's reasoning while it is
+    // being produced; without it, local reasoning models look stalled.
+    function startThinkingLine() {
+        const line = document.createElement('details');
+        line.className = 'ai-log-line ai-log-thinking';
+        const summary = document.createElement('summary');
+        summary.textContent = 'Thinking';
+        line.open = true;
+        const body = document.createElement('div');
+        body.className = 'ai-log-thinking-body';
+        line.append(summary, body);
+        logElement.append(line);
+        logElement.scrollTop = logElement.scrollHeight;
+        setBusy('Thinking…');
+        return { line, summary, body, text: '', started: Date.now(), done: false };
+    }
+
+    function appendThinking(state, text) {
+        if (!text) {
             return;
         }
-        const content = /"content"\s*:\s*"/.exec(partialJson);
-        const size = content ? partialJson.length - content.index - content[0].length : 0;
-        line.textContent = `${name} ${path[1]}${name === 'write_file' && size ? ` (${formatTokens(size)} chars)` : ''}`;
+        state.text += text;
+        state.body.textContent = state.text;
+        state.body.scrollTop = state.body.scrollHeight;
         logElement.scrollTop = logElement.scrollHeight;
+    }
+
+    function finishThinkingLine(state) {
+        if (!state || state.done) {
+            return;
+        }
+        state.done = true;
+        if (!state.text.trim()) {
+            state.line.remove();
+            return;
+        }
+        const ms = Date.now() - state.started;
+        state.summary.textContent = `Thought for ${ms < 10000 ? `${(ms / 1000).toFixed(1)}s` : formatElapsed(ms)}`;
+        state.line.classList.add('is-done');
+        state.line.open = false;
+    }
+
+    // Splits streamed text into visible content and reasoning wrapped in
+    // <think>…</think> style tags. A tag may arrive split across deltas, so
+    // text that could be the start of one is held back until it resolves.
+    const THINK_TAGS = [['<think>', '</think>'], ['[THINK]', '[/THINK]']];
+
+    function createThinkSplitter() {
+        return { pending: '', open: null };
+    }
+
+    function splitThink(splitter, chunk, onText, onThinking) {
+        splitter.pending += chunk;
+        while (splitter.pending) {
+            const closeTag = splitter.open ? splitter.open[1] : null;
+            const needle = splitter.open ? closeTag : null;
+            let hit = -1;
+            let hitTag = null;
+            if (needle) {
+                hit = splitter.pending.indexOf(needle);
+                hitTag = needle;
+            } else {
+                for (const [tag] of THINK_TAGS) {
+                    const index = splitter.pending.indexOf(tag);
+                    if (index !== -1 && (hit === -1 || index < hit)) {
+                        hit = index;
+                        hitTag = tag;
+                    }
+                }
+            }
+            if (hit !== -1) {
+                const before = splitter.pending.slice(0, hit);
+                splitter.pending = splitter.pending.slice(hit + hitTag.length);
+                if (splitter.open) {
+                    onThinking(before);
+                    splitter.open = null;
+                } else {
+                    onText(before);
+                    splitter.open = THINK_TAGS.find(([tag]) => tag === hitTag);
+                }
+                continue;
+            }
+            // No complete tag: emit everything except a trailing prefix of one.
+            const candidates = splitter.open ? [closeTag] : THINK_TAGS.map(([tag]) => tag);
+            let hold = 0;
+            for (const tag of candidates) {
+                for (let length = Math.min(tag.length - 1, splitter.pending.length); length > hold; length--) {
+                    if (splitter.pending.endsWith(tag.slice(0, length))) {
+                        hold = length;
+                        break;
+                    }
+                }
+            }
+            const emit = splitter.pending.slice(0, splitter.pending.length - hold);
+            splitter.pending = splitter.pending.slice(splitter.pending.length - hold);
+            if (emit) {
+                (splitter.open ? onThinking : onText)(emit);
+            }
+            break;
+        }
+    }
+
+    function flushThink(splitter, onText, onThinking) {
+        if (splitter.pending) {
+            (splitter.open ? onThinking : onText)(splitter.pending);
+            splitter.pending = '';
+        }
     }
 
     // Marks the conversation so far as cacheable: the history is the bulk of
@@ -849,6 +957,7 @@
         const blocks = [];
         let stopReason = null;
         let textLine = null;
+        let thinking = null;
         // Each tool call is charged the time since the previous one ended,
         // so thinking before a call shows up on that call.
         let lastBlockEnd = Date.now();
@@ -866,6 +975,9 @@
                     setBusy('Writing…');
                 } else {
                     blocks[event.index] = block;
+                    if (block.type === 'thinking') {
+                        thinking = startThinkingLine();
+                    }
                 }
             } else if (event.type === 'content_block_delta') {
                 const block = blocks[event.index];
@@ -878,6 +990,7 @@
                     updateToolLine(block.line, block.name, block.json);
                 } else if (event.delta.type === 'thinking_delta' && block) {
                     block.thinking = (block.thinking || '') + event.delta.thinking;
+                    appendThinking(thinking, event.delta.thinking);
                 } else if (event.delta.type === 'signature_delta' && block) {
                     block.signature = event.delta.signature;
                 }
@@ -886,6 +999,8 @@
                 if (block && block.type === 'tool_use') {
                     block.ms = Date.now() - lastBlockEnd;
                     lastBlockEnd = Date.now();
+                } else if (block && block.type === 'thinking') {
+                    finishThinkingLine(thinking);
                 }
             } else if (event.type === 'message_delta') {
                 stopReason = event.delta.stop_reason || stopReason;
@@ -894,6 +1009,7 @@
                 throw new Error(event.error?.message || 'Stream error');
             }
         });
+        finishThinkingLine(thinking);
 
         const lines = new Map();
         const content = blocks.filter(Boolean).map((block) => {
@@ -949,10 +1065,35 @@
 
         let text = '';
         let textLine = null;
+        let thinking = null;
+        const splitter = createThinkSplitter();
         const toolCalls = [];
         let finishReason = null;
         let lastCallEnd = Date.now();
         let current = null;
+
+        const onText = (chunk) => {
+            if (!chunk) {
+                return;
+            }
+            finishThinkingLine(thinking);
+            if (!textLine) {
+                textLine = appendLog('assistant', '');
+                setBusy('Writing…');
+            }
+            text += chunk;
+            textLine.textContent = text;
+            logElement.scrollTop = logElement.scrollHeight;
+        };
+        const onThinking = (chunk) => {
+            if (!chunk) {
+                return;
+            }
+            if (!thinking || thinking.done) {
+                thinking = startThinkingLine();
+            }
+            appendThinking(thinking, chunk);
+        };
 
         await readSSE(response, (event) => {
             if (event.usage) {
@@ -965,14 +1106,15 @@
             }
             finishReason = choice.finish_reason || finishReason;
             const delta = choice.delta || {};
+            // Ollama, LM Studio, DeepSeek and OpenAI-style reasoning fields;
+            // models without one may put <think> tags into the content.
+            onThinking(delta.reasoning_content || delta.reasoning || '');
             if (delta.content) {
-                if (!textLine) {
-                    textLine = appendLog('assistant', '');
-                    setBusy('Writing…');
-                }
-                text += delta.content;
-                textLine.textContent = text;
-                logElement.scrollTop = logElement.scrollHeight;
+                splitThink(splitter, delta.content, onText, onThinking);
+            }
+            if (delta.tool_calls?.length) {
+                flushThink(splitter, onText, onThinking);
+                finishThinkingLine(thinking);
             }
             for (const call of delta.tool_calls || []) {
                 const slot = toolCalls[call.index] || (toolCalls[call.index] = { id: call.id, name: '', args: '', line: null });
@@ -1000,6 +1142,8 @@
             }
         });
 
+        flushThink(splitter, onText, onThinking);
+        finishThinkingLine(thinking);
         if (current) {
             current.ms = Date.now() - lastCallEnd;
         }

@@ -476,6 +476,39 @@
             content: '…';
         }
 
+        .ai-log-thinking {
+            color: var(--muted);
+            font-size: 0.85rem;
+        }
+
+        .ai-log-thinking summary {
+            cursor: pointer;
+            list-style: none;
+        }
+
+        .ai-log-thinking summary::before {
+            content: '▸ ';
+        }
+
+        .ai-log-thinking[open] summary::before {
+            content: '▾ ';
+        }
+
+        .ai-log-thinking:not(.is-done) summary::after {
+            content: '…';
+        }
+
+        .ai-log-thinking-body {
+            max-height: 160px;
+            overflow: auto;
+            margin-top: 4px;
+            padding-left: 1em;
+            border-left: 2px solid var(--line);
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            font-style: italic;
+        }
+
         .ai-system-prompt {
             margin-bottom: 12px;
         }
