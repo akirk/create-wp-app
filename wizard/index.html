@@ -476,6 +476,10 @@
             content: '…';
         }
 
+        .ai-system-prompt {
+            margin-bottom: 12px;
+        }
+
         .ai-system-prompt summary {
             cursor: pointer;
             font-weight: 600;
@@ -896,11 +900,6 @@
                             <textarea id="ai-prompt" name="aiPrompt" rows="5"></textarea>
                             <p class="hint">The more specific, the better: what is stored, what screens exist, who can use it.</p>
                         </div>
-                        <details class="ai-system-prompt">
-                            <summary>System prompt</summary>
-                            <p class="hint">Sent with every request, ahead of your prompt. It includes the plugin facts from step 1 and the WpApp README.</p>
-                            <pre id="ai-system-prompt"></pre>
-                        </details>
                     </fieldset>
 
                     <div class="actions">
@@ -916,6 +915,11 @@
                             <div id="ai-result" class="ai-result" hidden>
                                 <h2>Building <span class="result-plugin-name"></span></h2>
                                 <p id="ai-result-model" class="hint ai-result-model"></p>
+                                <details class="ai-system-prompt">
+                                    <summary>System prompt</summary>
+                                    <p class="hint">Sent with every request, ahead of your prompt. It includes the plugin facts from step 1 and the WpApp README.</p>
+                                    <pre id="ai-system-prompt"></pre>
+                                </details>
                                 <div id="ai-log" class="ai-log" aria-live="polite"></div>
                                 <div id="ai-busy" class="ai-busy" hidden></div>
                                 <div class="field" id="ai-followup-field">
