@@ -38,6 +38,10 @@
     const newFileAdd = document.getElementById('new-file-add');
     const endpointField = document.getElementById('ai-endpoint-field');
     const apiKeyField = document.getElementById('ai-api-key-field');
+    const effortSelect = document.getElementById('ai-effort');
+    const effortField = document.getElementById('ai-effort-field');
+    const fastCheckbox = document.getElementById('ai-fast');
+    const fastField = document.getElementById('ai-fast-field');
 
     // `endpoint` is the API base URL. Chat and model-list paths hang off it.
     const PROVIDERS = {
@@ -48,7 +52,9 @@
             needsKey: true,
             chatPath: '/v1/messages',
             modelsPath: '/v1/models',
-            api: 'anthropic'
+            api: 'anthropic',
+            effort: true,
+            fast: true
         },
         openai: {
             label: 'OpenAI',
@@ -57,7 +63,8 @@
             needsKey: true,
             chatPath: '/v1/chat/completions',
             modelsPath: '/v1/models',
-            api: 'openai'
+            api: 'openai',
+            effort: true
         },
         ollama: {
             label: 'Ollama',
@@ -103,13 +110,22 @@
         return (endpointInput.value.trim() || providerDef().endpoint).replace(/\/+$/, '');
     }
 
+    function fastMode() {
+        return Boolean(providerDef().fast && fastCheckbox.checked);
+    }
+
+    function effort() {
+        return providerDef().effort ? effortSelect.value : '';
+    }
+
     function authHeaders() {
         const apiKey = apiKeyInput.value.trim();
         if (providerDef().api === 'anthropic') {
             return {
                 'x-api-key': apiKey,
                 'anthropic-version': '2023-06-01',
-                'anthropic-dangerous-direct-browser-access': 'true'
+                'anthropic-dangerous-direct-browser-access': 'true',
+                ...(fastMode() ? { 'anthropic-beta': 'fast-mode-2026-02-01' } : {})
             };
         }
         return apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
@@ -142,7 +158,9 @@
         settings[provider] = {
             model: modelSelect.value.trim(),
             endpoint: endpointInput.value.trim(),
-            apiKey: apiKeyInput.value.trim()
+            apiKey: apiKeyInput.value.trim(),
+            effort: effortSelect.value,
+            fast: fastCheckbox.checked
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
     }
@@ -156,8 +174,12 @@
         setModelOptions(model ? [model] : [], model);
         endpointInput.value = saved.endpoint || def.endpoint;
         apiKeyInput.value = saved.apiKey || '';
+        effortSelect.value = saved.effort || 'medium';
+        fastCheckbox.checked = Boolean(saved.fast);
         endpointField.hidden = def.needsKey;
         apiKeyField.hidden = !def.needsKey;
+        effortField.hidden = !def.effort;
+        fastField.hidden = !def.fast;
         setConnection('', '');
         if (!def.needsKey || apiKeyInput.value) {
             checkConnection();
@@ -542,37 +564,67 @@
         }
     ];
 
-    function normalizePath(path) {
+    // The WpApp library sources, read-only, so the model can look up the
+    // real API instead of guessing. Loaded from the bundled zip on first use.
+    let vendorFiles = null;
+
+    async function loadVendorFiles() {
+        if (vendorFiles) {
+            return vendorFiles;
+        }
+        vendorFiles = new Map();
+        try {
+            const zip = await window.JSZip.loadAsync(await window.CreateWpApp.fetchAsset('wp-app.zip'));
+            for (const entry of Object.values(zip.files)) {
+                if (!entry.dir && /\.(php|md|json)$/.test(entry.name)) {
+                    vendorFiles.set(`vendor/akirk/wp-app/${entry.name}`, await entry.async('string'));
+                }
+            }
+        } catch (error) {
+            // Without the sources the model still has the README.
+        }
+        return vendorFiles;
+    }
+
+    function normalizePath(path, forWrite) {
         const clean = String(path || '').replace(/\\/g, '/').replace(/^\.?\/+/, '').replace(/\/+/g, '/');
         if (!clean || clean.split('/').includes('..')) {
             throw new Error(`Invalid path: ${path}`);
         }
-        if (clean === 'vendor' || clean.startsWith('vendor/')) {
+        if (forWrite && (clean === 'vendor' || clean.startsWith('vendor/'))) {
             throw new Error('vendor/ is managed by the scaffold and cannot be modified.');
         }
         return clean;
     }
 
+    function byteLength(text) {
+        return new TextEncoder().encode(text).length;
+    }
+
     function runTool(name, input) {
         switch (name) {
             case 'list_files': {
-                return [...files.keys()].sort().map((path) => `${path} (${new TextEncoder().encode(files.get(path)).length} bytes)`).join('\n');
+                const all = new Map([...(vendorFiles || []), ...files]);
+                return [...all.keys()].sort().map((path) => `${path} (${byteLength(all.get(path))} bytes${path.startsWith('vendor/') ? ', read-only' : ''})`).join('\n');
             }
             case 'read_file': {
                 const path = normalizePath(input.path);
-                if (!files.has(path)) {
-                    throw new Error(`File not found: ${path}`);
+                if (files.has(path)) {
+                    return files.get(path);
                 }
-                return files.get(path);
+                if (vendorFiles && vendorFiles.has(path)) {
+                    return vendorFiles.get(path);
+                }
+                throw new Error(`File not found: ${path}`);
             }
             case 'write_file': {
-                const path = normalizePath(input.path);
+                const path = normalizePath(input.path, true);
                 files.set(path, String(input.content ?? ''));
                 updateFileStatus(path);
                 return `Wrote ${path}`;
             }
             case 'edit_file': {
-                const path = normalizePath(input.path);
+                const path = normalizePath(input.path, true);
                 if (!files.has(path)) {
                     throw new Error(`File not found: ${path}`);
                 }
@@ -590,7 +642,7 @@
                 return `Edited ${path}`;
             }
             case 'delete_file': {
-                const path = normalizePath(input.path);
+                const path = normalizePath(input.path, true);
                 if (!files.delete(path)) {
                     throw new Error(`File not found: ${path}`);
                 }
@@ -634,6 +686,12 @@
         const parts = [
             `You are building a WordPress plugin that is an "app" powered by the WpApp library (akirk/wp-app). The plugin lives in wp-content/plugins/${config.slug}/ and is already scaffolded; your job is to turn it into the app the user describes by editing files with the provided tools.`,
             '',
+            'Scope: build the smallest version that does what the user asked, and nothing more. This is a first draft the user will refine with follow-up prompts, and every extra feature costs them minutes of waiting.',
+            '- Implement only what the prompt asks for. No REST routes, WordPress Abilities, dashboard widgets, settings screens, categories, import/export or admin pages unless the user asked for them.',
+            '- Prefer few, focused files. Keep PHP files under roughly 200 lines; a template should be a page, not a framework. A few dozen lines of CSS on top of the WpApp defaults is usually enough.',
+            '- Do not rewrite README.md, composer.json or .gitignore unless asked.',
+            '- Once the core flow works, stop. Finish with a summary of at most one short paragraph plus a list of the routes; do not enumerate every file.',
+            '',
             'Plugin facts:',
             `- Plugin name: ${config.pluginName}`,
             `- Slug / text domain / folder: ${config.slug}`,
@@ -644,7 +702,8 @@
             '- There is no build step: write plain PHP, CSS and vanilla JavaScript. Put assets under assets/ and enqueue them with plugin_dir_url().',
             '',
             'Rules:',
-            '- Read the existing files before changing them and follow the structure and extension points they already provide.',
+            '- The scaffold files are included in the first message; do not read them again. The WpApp library sources under vendor/akirk/wp-app/ can be read (read_file) whenever the README leaves an API question open; they cannot be changed.',
+            '- Batch your work: when several files do not depend on each other, emit all the write_file calls in a single response instead of one per turn. Write a file once, complete; avoid follow-up edit_file rounds on files you just wrote.',
             '- Keep __construct() limited to configuring WpApp, assigning properties and adding hooks. Register post types, taxonomies, rewrite rules, shortcodes, blocks on init; REST routes on rest_api_init; dashboard widgets on wp_dashboard_setup; admin menus on admin_menu. Never register those directly in the constructor.',
             '- Define WpApp routes in setup_routes() and menu entries in setup_menu(). Each route maps to a template in templates/.',
             '- Flush rewrite rules only on activation and deactivation.',
@@ -667,7 +726,11 @@
 
     function buildFirstUserMessage(prompt) {
         const listing = runTool('list_files', {});
-        return `${prompt.trim()}\n\nCurrent files in the plugin:\n${listing}`;
+        const contents = [...files.keys()].sort()
+            .filter((path) => !path.startsWith('vendor/'))
+            .map((path) => `--- ${path} ---\n${files.get(path)}`)
+            .join('\n\n');
+        return `${prompt.trim()}\n\nCurrent files in the plugin:\n${listing}\n\nContents of the scaffold files:\n\n${contents}`;
     }
 
     /* ---------- providers ---------- */
@@ -718,20 +781,77 @@
         return new Error(`Provider returned ${response.status}: ${detail}`);
     }
 
-    // Returns { text, toolCalls: [{id, name, input}], stopReason, assistantMessage }
+    // Token usage of the current run, shown in the finish line.
+    const usage = { turns: 0, input: 0, cached: 0, output: 0 };
+
+    // Anthropic reports input counts in message_start and repeats them, with
+    // the final output count, in message_delta; each is taken once.
+    function addInputUsage(data) {
+        if (!data) {
+            return;
+        }
+        usage.input += (data.input_tokens || 0) + (data.cache_read_input_tokens || 0) + (data.cache_creation_input_tokens || 0);
+        usage.cached += data.cache_read_input_tokens || 0;
+    }
+
+    function addOutputUsage(data) {
+        usage.output += data?.output_tokens || 0;
+    }
+
+    function formatTokens(count) {
+        return count >= 1000 ? `${(count / 1000).toFixed(count >= 10000 ? 0 : 1)}k` : String(count);
+    }
+
+    // A log line for a tool call that is still streaming in; shows the path
+    // and size as they arrive so long writes do not look like a stall.
+    function startToolLine(name) {
+        const line = appendLog('tool', name);
+        line.classList.add('is-streaming');
+        setBusy('Writing files…');
+        return line;
+    }
+
+    function updateToolLine(line, name, partialJson) {
+        const path = /"path"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(partialJson);
+        if (!path) {
+            return;
+        }
+        const content = /"content"\s*:\s*"/.exec(partialJson);
+        const size = content ? partialJson.length - content.index - content[0].length : 0;
+        line.textContent = `${name} ${path[1]}${name === 'write_file' && size ? ` (${formatTokens(size)} chars)` : ''}`;
+        logElement.scrollTop = logElement.scrollHeight;
+    }
+
+    // Marks the conversation so far as cacheable: the history is the bulk of
+    // every request and is identical up to the newest message.
+    function withCacheBreakpoint(history) {
+        const last = history[history.length - 1];
+        const content = typeof last.content === 'string' ? [{ type: 'text', text: last.content }] : last.content.map((block) => ({ ...block }));
+        content[content.length - 1] = { ...content[content.length - 1], cache_control: { type: 'ephemeral' } };
+        return [...history.slice(0, -1), { ...last, content }];
+    }
+
+    // Returns { text, toolCalls: [{id, name, input, line}], stopReason, assistantMessage }
     async function callAnthropic(systemPrompt, history, signal) {
+        const body = {
+            model: modelSelect.value.trim(),
+            max_tokens: 64000,
+            stream: true,
+            system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+            tools: TOOLS,
+            messages: withCacheBreakpoint(history)
+        };
+        if (effort()) {
+            body.output_config = { effort: effort() };
+        }
+        if (fastMode()) {
+            body.speed = 'fast';
+        }
         const response = await fetch(baseUrl() + providerDef().chatPath, {
             method: 'POST',
             signal,
             headers: { 'Content-Type': 'application/json', ...authHeaders() },
-            body: JSON.stringify({
-                model: modelSelect.value.trim(),
-                max_tokens: 64000,
-                stream: true,
-                system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
-                tools: TOOLS,
-                messages: history
-            })
+            body: JSON.stringify(body)
         });
 
         if (!response.ok) {
@@ -743,10 +863,12 @@
         let textLine = null;
 
         await readSSE(response, (event) => {
-            if (event.type === 'content_block_start') {
+            if (event.type === 'message_start') {
+                addInputUsage(event.message?.usage);
+            } else if (event.type === 'content_block_start') {
                 const block = event.content_block;
                 if (block.type === 'tool_use') {
-                    blocks[event.index] = { type: 'tool_use', id: block.id, name: block.name, json: '' };
+                    blocks[event.index] = { type: 'tool_use', id: block.id, name: block.name, json: '', line: startToolLine(block.name) };
                 } else if (block.type === 'text') {
                     blocks[event.index] = { type: 'text', text: '' };
                     textLine = appendLog('assistant', '');
@@ -762,6 +884,7 @@
                     logElement.scrollTop = logElement.scrollHeight;
                 } else if (event.delta.type === 'input_json_delta') {
                     block.json += event.delta.partial_json;
+                    updateToolLine(block.line, block.name, block.json);
                 } else if (event.delta.type === 'thinking_delta' && block) {
                     block.thinking = (block.thinking || '') + event.delta.thinking;
                 } else if (event.delta.type === 'signature_delta' && block) {
@@ -769,13 +892,16 @@
                 }
             } else if (event.type === 'message_delta') {
                 stopReason = event.delta.stop_reason || stopReason;
+                addOutputUsage(event.usage);
             } else if (event.type === 'error') {
                 throw new Error(event.error?.message || 'Stream error');
             }
         });
 
+        const lines = new Map();
         const content = blocks.filter(Boolean).map((block) => {
             if (block.type === 'tool_use') {
+                lines.set(block.id, block.line);
                 return { type: 'tool_use', id: block.id, name: block.name, input: block.json ? JSON.parse(block.json) : {} };
             }
             return block;
@@ -784,7 +910,7 @@
         return {
             stopReason,
             text: content.filter((b) => b.type === 'text').map((b) => b.text).join('\n'),
-            toolCalls: content.filter((b) => b.type === 'tool_use'),
+            toolCalls: content.filter((b) => b.type === 'tool_use').map((b) => ({ ...b, line: lines.get(b.id) })),
             assistantMessage: { role: 'assistant', content }
         };
     }
@@ -810,6 +936,8 @@
             body: JSON.stringify({
                 model: modelSelect.value.trim(),
                 stream: true,
+                stream_options: { include_usage: true },
+                ...(effort() ? { reasoning_effort: effort() } : {}),
                 messages: [{ role: 'system', content: systemPrompt }, ...history],
                 tools: TOOLS.map((tool) => ({
                     type: 'function',
@@ -828,6 +956,10 @@
         let finishReason = null;
 
         await readSSE(response, (event) => {
+            if (event.usage) {
+                addInputUsage({ input_tokens: event.usage.prompt_tokens });
+                addOutputUsage({ output_tokens: event.usage.completion_tokens });
+            }
             const choice = event.choices?.[0];
             if (!choice) {
                 return;
@@ -844,15 +976,19 @@
                 logElement.scrollTop = logElement.scrollHeight;
             }
             for (const call of delta.tool_calls || []) {
-                const slot = toolCalls[call.index] || (toolCalls[call.index] = { id: call.id, name: '', args: '' });
+                const slot = toolCalls[call.index] || (toolCalls[call.index] = { id: call.id, name: '', args: '', line: null });
                 if (call.id) {
                     slot.id = call.id;
                 }
                 if (call.function?.name) {
                     slot.name += call.function.name;
                 }
+                if (slot.name && !slot.line) {
+                    slot.line = startToolLine(slot.name);
+                }
                 if (call.function?.arguments) {
                     slot.args += call.function.arguments;
+                    updateToolLine(slot.line, slot.name, slot.args);
                 }
             }
         });
@@ -860,7 +996,8 @@
         const calls = toolCalls.filter(Boolean).map((call, index) => ({
             id: call.id || `call_${index}`,
             name: call.name,
-            input: call.args ? JSON.parse(call.args) : {}
+            input: call.args ? JSON.parse(call.args) : {},
+            line: call.line
         }));
 
         return {
@@ -889,7 +1026,9 @@
         const api = providerDef().api;
         const call = api === 'anthropic' ? callAnthropic : callOpenAI;
         const toolResults = api === 'anthropic' ? toolResultsAnthropic : toolResultsOpenAI;
-        const systemPrompt = buildSystemPrompt(await getWpAppReadme());
+        const [readme] = await Promise.all([getWpAppReadme(), loadVendorFiles()]);
+        const systemPrompt = buildSystemPrompt(readme);
+        Object.assign(usage, { turns: 0, input: 0, cached: 0, output: 0 });
 
         turnStart = messages.length;
         let content = messages.length ? prompt.trim() : buildFirstUserMessage(prompt);
@@ -904,6 +1043,7 @@
         for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
             setBusy('Thinking…');
             const result = await call(systemPrompt, messages, abortController.signal);
+            usage.turns++;
             messages.push(result.assistantMessage);
 
             if (!result.toolCalls.length) {
@@ -925,7 +1065,9 @@
             setBusy('Applying changes…');
             const results = [];
             for (const toolCall of result.toolCalls) {
-                const line = appendLog('tool', describeToolCall(toolCall.name, toolCall.input));
+                const line = toolCall.line || appendLog('tool', '');
+                line.classList.remove('is-streaming');
+                line.textContent = describeToolCall(toolCall.name, toolCall.input);
                 try {
                     results.push({ id: toolCall.id, output: runTool(toolCall.name, toolCall.input) });
                 } catch (error) {
@@ -1013,7 +1155,8 @@
         try {
             await runAgent(prompt);
             followupInput.value = '';
-            appendLog('done', `Finished in ${stopTimer()}. Download the zip or run it in Playground, or send another prompt to refine.`);
+            const cached = usage.input ? Math.round((usage.cached / usage.input) * 100) : 0;
+            appendLog('done', `Finished in ${stopTimer()} · ${usage.turns} turn${usage.turns === 1 ? '' : 's'} · ${formatTokens(usage.input)} input tokens (${cached}% cached) · ${formatTokens(usage.output)} output. Download the zip or run it in Playground, or send another prompt to refine.`);
             window.CreateWpApp.setStatus('');
         } catch (error) {
             if (error.name === 'AbortError') {
@@ -1052,8 +1195,9 @@
         newFileAdd.disabled = active;
         // The zip can be downloaded at any time; it reflects the files so far.
         playgroundButton.disabled = active;
+        // goToStep() below re-disables the current step's pill.
         for (const button of document.querySelectorAll('.stepbar .step, .back-button')) {
-            button.disabled = active || button.disabled;
+            button.disabled = active;
         }
         if (!active) {
             window.CreateWpApp.goToStep(3);
@@ -1106,6 +1250,8 @@
         checkConnection();
     });
     modelSelect.addEventListener('change', saveSettings);
+    effortSelect.addEventListener('change', saveSettings);
+    fastCheckbox.addEventListener('change', saveSettings);
     stopButton.addEventListener('click', () => abortController?.abort());
     promptInput.addEventListener('keydown', (event) => {
         if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {

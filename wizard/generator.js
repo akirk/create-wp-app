@@ -417,6 +417,7 @@
         setStatus,
         runInPlayground,
         goToStep,
-        getStep: () => currentStep
+        getStep: () => currentStep,
+        fetchAsset
     };
 })();
