@@ -11,8 +11,16 @@ class App extends BaseApp {
         // See https://github.com/akirk/wp-app for documentation.
         $this->app = new WpApp( $this->get_template_dir(), $this->get_url_path(), [
             // Access control
-            // 'require_login'      => true,
-            // 'require_capability' => 'read',
+            // 'require_login'      => true,   // default; shorthand for require_capability => 'read'
+            // 'require_capability' => 'read', // wins over require_login and implies it
+
+            // App content: post types / taxonomies the app registers. Declaring
+            // them gates their REST reads with the app's capability (the front-end
+            // require_login does NOT cover /wp-json/) and injects show_in_rest and
+            // the gated controller, so register_post_type() needs no REST args.
+            // A map sets a capability per type: [ '{{identifier}}_item' => 'edit_posts' ].
+            // 'post_types'         => [ '{{identifier}}_item' ],
+            // 'taxonomies'         => [ '{{identifier}}_category' ],
 
             // Masterbar
             // 'show_masterbar_for_anonymous' => true,
@@ -24,8 +32,9 @@ class App extends BaseApp {
             // App identity
             // 'app_name'            => $this->get_plugin_name(),
             // 'app_name_textdomain' => '{{slug}}',
-            // 'my_apps'             => true,
-            // 'my_apps_icon'        => null,
+            // Launchers (My Apps, OpenStation): false to opt out, or a custom name
+            // 'launcher'            => true,
+            // 'app_icon'            => null, // URL or 'dashicons-…'
         ] );
 
         // Uncomment only when these extension points contain real code.
@@ -69,17 +78,16 @@ class App extends BaseApp {
          * If you do need custom tables:
          *
          * class {{namespace}}Storage extends BaseStorage {
+         *     // Keyed by unprefixed table name; create_tables() adds the prefix
+         *     // and wraps each definition in CREATE TABLE with the site's charset.
          *     protected function get_schema() {
-         *         $charset_collate = $this->wpdb->get_charset_collate();
          *         return [
-         *             "CREATE TABLE {$this->wpdb->prefix}{{identifier}}_items (
-         *                 id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+         *             '{{identifier}}_items' => "id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
          *                 user_id bigint(20) unsigned NOT NULL,
          *                 title varchar(255) NOT NULL,
          *                 created_at datetime DEFAULT CURRENT_TIMESTAMP,
-         *                 PRIMARY KEY (id),
-         *                 KEY user_id (user_id)
-         *             ) $charset_collate;",
+         *                 PRIMARY KEY  (id),
+         *                 KEY user_id (user_id)",
          *         ];
          *     }
          * }
@@ -115,16 +123,15 @@ class App extends BaseApp {
     public function register_post_types(): void {
         /*
          * Register custom post types here. This method runs on WordPress init.
+         * List each type in the 'post_types' option above: the app then gates
+         * its REST reads and adds show_in_rest for the block editor, so no
+         * REST arguments are needed here.
          *
          * register_post_type( '{{identifier}}_item', [
-         *     'label'        => '{{plugin-name}} Items',
-         *     'public'       => false,
-         *     'show_ui'      => true,
-         *     'show_in_rest' => true,
-         *     // Gate anonymous REST reads; front-end require_login does NOT cover
-         *     // the REST API. Requires akirk/wp-app ^1.5.
-         *     'rest_controller_class' => \WpApp\Rest\Access::protect_post_type( '{{identifier}}_item', 'read' ),
-         *     'supports'     => [ 'title', 'editor', 'author' ],
+         *     'label'    => '{{plugin-name}} Items',
+         *     'public'   => false,
+         *     'show_ui'  => true,
+         *     'supports' => [ 'title', 'editor', 'author' ],
          * ] );
          */
     }
@@ -132,13 +139,13 @@ class App extends BaseApp {
     public function register_taxonomies(): void {
         /*
          * Register taxonomies here. This method runs on WordPress init.
+         * List each taxonomy in the 'taxonomies' option above (see
+         * register_post_types()).
          *
          * register_taxonomy( '{{identifier}}_category', '{{identifier}}_item', [
          *     'label'        => '{{plugin-name}} Categories',
          *     'hierarchical' => true,
          *     'show_ui'      => true,
-         *     'show_in_rest' => true,
-         *     'rest_controller_class' => \WpApp\Rest\Access::protect_taxonomy( '{{identifier}}_category', 'read' ),
          * ] );
          */
     }
@@ -176,10 +183,14 @@ class App extends BaseApp {
     }
 
     public function register_abilities(): void {
-        // Register focused WordPress Abilities here. AI Assistant can discover
-        // and execute these instead of guessing plugin internals.
-        // See https://github.com/akirk/ai-assistant/blob/main/docs/plugin-integration.md
-        // for AI Assistant-specific guidance.
+        // Register focused WordPress Abilities here so assistants, automation
+        // and other apps can use this app without reading its code. The
+        // description and schemas ARE the API: one ability per verb-noun
+        // (list-items, get-item, create-item), say what is returned and what
+        // to do on failure, describe every property, page every list-* and
+        // annotate readonly/destructive/idempotent truthfully. Return WP_Error
+        // with a stable code (not_found) on failure, never false/null/[].
+        // Full guidance: vendor/akirk/wp-app/docs/abilities.md
         //
         // if ( ! function_exists( 'wp_register_ability' ) ) {
         //     return;
@@ -192,10 +203,12 @@ class App extends BaseApp {
         //     'input_schema'        => [
         //         'type'                 => 'object',
         //         'properties'           => [
-        //             'search' => [
+        //             'search'   => [
         //                 'type'        => 'string',
         //                 'description' => 'Optional search term for item titles.',
         //             ],
+        //             'page'     => [ 'type' => 'integer', 'minimum' => 1, 'default' => 1, 'description' => 'Page of results.' ],
+        //             'per_page' => [ 'type' => 'integer', 'minimum' => 1, 'maximum' => 50, 'default' => 10, 'description' => 'Items per page.' ],
         //         ],
         //         'additionalProperties' => false,
         //     ],
@@ -207,16 +220,19 @@ class App extends BaseApp {
         //                 'items' => [
         //                     'type'       => 'object',
         //                     'properties' => [
-        //                         'id'    => [ 'type' => 'integer', 'description' => 'Use with {{slug}}/get-item.' ],
-        //                         'title' => [ 'type' => 'string' ],
+        //                         'id'    => [ 'type' => 'integer', 'description' => 'Pass to {{slug}}/get-item.' ],
+        //                         'title' => [ 'type' => 'string', 'description' => 'Item title.' ],
         //                     ],
         //                 ],
         //             ],
+        //             'total' => [ 'type' => 'integer', 'description' => 'Total number of matching items across all pages.' ],
         //         ],
         //     ],
         //     'execute_callback'    => [ $this, 'list_ability_items' ],
+        //     // Reuse the app's capability so an ability is never a way around
+        //     // the app's access control. Leave meta.public unset.
         //     'permission_callback' => function() {
-        //         return current_user_can( 'read' );
+        //         return current_user_can( $this->app->get_required_capability() ?: 'read' );
         //     },
         //     'meta'                => [
         //         'annotations' => [
