@@ -484,6 +484,33 @@
             content: '…';
         }
 
+        .ai-system-prompt summary {
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .ai-system-prompt pre {
+            max-height: 320px;
+            overflow: auto;
+            margin: 8px 0 0;
+            padding: 12px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            font-size: 0.8rem;
+            line-height: 1.45;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+
+        .ai-log-time {
+            margin-left: 8px;
+            opacity: 0.6;
+        }
+
+        .ai-log-time::before {
+            content: '· ';
+        }
+
         .ai-connection {
             min-height: 1.2em;
             margin: 0;
@@ -892,6 +919,11 @@
                             <textarea id="ai-prompt" name="aiPrompt" rows="5"></textarea>
                             <p class="hint">The more specific, the better: what is stored, what screens exist, who can use it.</p>
                         </div>
+                        <details class="ai-system-prompt">
+                            <summary>System prompt</summary>
+                            <p class="hint">Sent with every request, ahead of your prompt. It includes the plugin facts from step 1 and the WpApp README.</p>
+                            <pre id="ai-system-prompt"></pre>
+                        </details>
                     </fieldset>
 
                     <div class="actions">

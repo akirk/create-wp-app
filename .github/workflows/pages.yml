@@ -44,20 +44,13 @@ jobs:
           unzip -q "$archive_path" -d "$work_dir/source"
           source_dir="$(find "$work_dir/source" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
 
-          mkdir -p "$runtime_dir/src/templates" wizard/assets
+          # The whole runtime: class-registry.php requires every src/ file, so a
+          # hand-picked list breaks activation as soon as upstream adds one.
+          mkdir -p "$runtime_dir" wizard/assets
           cp "$source_dir/LICENSE" "$runtime_dir/LICENSE"
           cp "$source_dir/README.md" "$runtime_dir/README.md"
           cp "$source_dir/composer.json" "$runtime_dir/composer.json"
-          cp "$source_dir/src/BaseStorage.php" "$runtime_dir/src/BaseStorage.php"
-          cp "$source_dir/src/abstract-baseapp.php" "$runtime_dir/src/abstract-baseapp.php"
-          cp "$source_dir/src/class-masterbar.php" "$runtime_dir/src/class-masterbar.php"
-          cp "$source_dir/src/class-registry.php" "$runtime_dir/src/class-registry.php"
-          cp "$source_dir/src/class-router.php" "$runtime_dir/src/class-router.php"
-          cp "$source_dir/src/class-settings.php" "$runtime_dir/src/class-settings.php"
-          cp "$source_dir/src/class-wpapp.php" "$runtime_dir/src/class-wpapp.php"
-          cp "$source_dir/src/functions.php" "$runtime_dir/src/functions.php"
-          cp "$source_dir/src/templates/403.php" "$runtime_dir/src/templates/403.php"
-          cp "$source_dir/src/templates/404.php" "$runtime_dir/src/templates/404.php"
+          cp -R "$source_dir/src" "$runtime_dir/src"
 
           ( cd "$runtime_dir" && zip -qr "$GITHUB_WORKSPACE/wizard/assets/wp-app.zip" . )
 
