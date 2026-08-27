@@ -682,7 +682,7 @@
         return readmeCache;
     }
 
-    function buildSystemPrompt(readme) {
+    function buildSystemPrompt(readme, config) {
         const parts = [
             `You are building a WordPress plugin that is an "app" powered by the WpApp library (akirk/wp-app). The plugin lives in wp-content/plugins/${config.slug}/ and is already scaffolded; your job is to turn it into the app the user describes by editing files with the provided tools.`,
             '',
@@ -722,6 +722,14 @@
         }
 
         return parts.join('\n');
+    }
+
+    // The <details> on step 2 shows the exact prompt the model will get.
+    const systemPromptView = document.getElementById('ai-system-prompt');
+
+    async function renderSystemPrompt() {
+        const readme = await getWpAppReadme();
+        systemPromptView.textContent = buildSystemPrompt(readme, window.CreateWpApp.getConfig());
     }
 
     function buildFirstUserMessage(prompt) {
@@ -861,6 +869,9 @@
         const blocks = [];
         let stopReason = null;
         let textLine = null;
+        // Each tool call is charged the time since the previous one ended,
+        // so thinking before a call shows up on that call.
+        let lastBlockEnd = Date.now();
 
         await readSSE(response, (event) => {
             if (event.type === 'message_start') {
@@ -890,6 +901,12 @@
                 } else if (event.delta.type === 'signature_delta' && block) {
                     block.signature = event.delta.signature;
                 }
+            } else if (event.type === 'content_block_stop') {
+                const block = blocks[event.index];
+                if (block && block.type === 'tool_use') {
+                    block.ms = Date.now() - lastBlockEnd;
+                    lastBlockEnd = Date.now();
+                }
             } else if (event.type === 'message_delta') {
                 stopReason = event.delta.stop_reason || stopReason;
                 addOutputUsage(event.usage);
@@ -901,7 +918,7 @@
         const lines = new Map();
         const content = blocks.filter(Boolean).map((block) => {
             if (block.type === 'tool_use') {
-                lines.set(block.id, block.line);
+                lines.set(block.id, { line: block.line, ms: block.ms });
                 return { type: 'tool_use', id: block.id, name: block.name, input: block.json ? JSON.parse(block.json) : {} };
             }
             return block;
@@ -910,7 +927,7 @@
         return {
             stopReason,
             text: content.filter((b) => b.type === 'text').map((b) => b.text).join('\n'),
-            toolCalls: content.filter((b) => b.type === 'tool_use').map((b) => ({ ...b, line: lines.get(b.id) })),
+            toolCalls: content.filter((b) => b.type === 'tool_use').map((b) => ({ ...b, ...lines.get(b.id) })),
             assistantMessage: { role: 'assistant', content }
         };
     }
@@ -954,6 +971,8 @@
         let textLine = null;
         const toolCalls = [];
         let finishReason = null;
+        let lastCallEnd = Date.now();
+        let current = null;
 
         await readSSE(response, (event) => {
             if (event.usage) {
@@ -986,6 +1005,14 @@
                 if (slot.name && !slot.line) {
                     slot.line = startToolLine(slot.name);
                 }
+                if (current !== slot) {
+                    // A new call started: the previous one is complete.
+                    if (current) {
+                        current.ms = Date.now() - lastCallEnd;
+                        lastCallEnd = Date.now();
+                    }
+                    current = slot;
+                }
                 if (call.function?.arguments) {
                     slot.args += call.function.arguments;
                     updateToolLine(slot.line, slot.name, slot.args);
@@ -993,11 +1020,16 @@
             }
         });
 
+        if (current) {
+            current.ms = Date.now() - lastCallEnd;
+        }
+
         const calls = toolCalls.filter(Boolean).map((call, index) => ({
             id: call.id || `call_${index}`,
             name: call.name,
             input: call.args ? JSON.parse(call.args) : {},
-            line: call.line
+            line: call.line,
+            ms: call.ms
         }));
 
         return {
@@ -1027,7 +1059,7 @@
         const call = api === 'anthropic' ? callAnthropic : callOpenAI;
         const toolResults = api === 'anthropic' ? toolResultsAnthropic : toolResultsOpenAI;
         const [readme] = await Promise.all([getWpAppReadme(), loadVendorFiles()]);
-        const systemPrompt = buildSystemPrompt(readme);
+        const systemPrompt = buildSystemPrompt(readme, config);
         Object.assign(usage, { turns: 0, input: 0, cached: 0, output: 0 });
 
         turnStart = messages.length;
@@ -1068,10 +1100,16 @@
                 const line = toolCall.line || appendLog('tool', '');
                 line.classList.remove('is-streaming');
                 line.textContent = describeToolCall(toolCall.name, toolCall.input);
+                if (toolCall.ms) {
+                    const time = document.createElement('span');
+                    time.className = 'ai-log-time';
+                    time.textContent = toolCall.ms < 10000 ? `${(toolCall.ms / 1000).toFixed(1)}s` : formatElapsed(toolCall.ms);
+                    line.append(time);
+                }
                 try {
                     results.push({ id: toolCall.id, output: runTool(toolCall.name, toolCall.input) });
                 } catch (error) {
-                    line.textContent += ` — ${error.message}`;
+                    line.append(` — ${error.message}`);
                     line.classList.add('ai-log-error');
                     results.push({ id: toolCall.id, output: `Error: ${error.message}`, isError: true });
                 }
@@ -1227,6 +1265,9 @@
         if (event.detail.step === 2 && !promptEdited) {
             const name = pluginNameInput.value.trim();
             promptInput.value = name ? `Build a ${name} app.` : '';
+        }
+        if (event.detail.step === 2) {
+            renderSystemPrompt();
         }
         // Reached via the step pill: seed the plain scaffold if there is
         // nothing yet, or if the name/setup changed since it was built.
