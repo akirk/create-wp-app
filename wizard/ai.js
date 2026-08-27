@@ -48,7 +48,7 @@
             chatPath: '/v1/messages',
             modelsPath: '/v1/models',
             api: 'anthropic',
-            effort: true
+            effort: 'medium'
         },
         openai: {
             label: 'OpenAI',
@@ -58,7 +58,7 @@
             chatPath: '/v1/chat/completions',
             modelsPath: '/v1/models',
             api: 'openai',
-            effort: true
+            effort: 'medium'
         },
         ollama: {
             label: 'Ollama',
@@ -67,7 +67,8 @@
             needsKey: false,
             chatPath: '/v1/chat/completions',
             modelsPath: '/api/tags',
-            api: 'openai'
+            api: 'openai',
+            effort: 'low'
         },
         lmstudio: {
             label: 'LM Studio',
@@ -76,7 +77,8 @@
             needsKey: false,
             chatPath: '/v1/chat/completions',
             modelsPath: '/v1/models',
-            api: 'openai'
+            api: 'openai',
+            effort: 'low'
         }
     };
 
@@ -104,12 +106,14 @@
         return (endpointInput.value.trim() || providerDef().endpoint).replace(/\/+$/, '');
     }
 
-    // Fixed at medium: in measured runs it builds a working first version
-    // in a fraction of the time of high, and follow-up prompts refine it.
-    const EFFORT = 'medium';
-
+    // Reasoning effort per provider, not user-settable. Hosted models sit at
+    // medium: in measured runs it builds a working first version in a
+    // fraction of the time of high, and follow-up prompts refine it. Local
+    // models get low: at single-digit tokens per second, reasoning is most
+    // of the wait, and chat templates that read the value (gpt-oss style
+    // `Reasoning strength`) default to high when nothing is sent.
     function effort() {
-        return providerDef().effort ? EFFORT : '';
+        return providerDef().effort || '';
     }
 
     function authHeaders() {
@@ -674,7 +678,9 @@
             'Working:',
             '- The scaffold files are in the first message; do not read them again. Its comments document the WpApp options and extension points; follow them. Read vendor/akirk/wp-app/src/ when a library API is unclear.',
             '- Emit all independent write_file calls in one response. Write each file once, complete and syntactically valid; there is no linter.',
+            '- Do not draft file contents in your reasoning. Decide what each file must contain in a few sentences, then write the code once, directly in the write_file call.',
             '- Register post types, taxonomies and hooks on init, not in the constructor; routes in setup_routes(), menu entries in setup_menu(); flush rewrite rules only on (de)activation.',
+            "- Route placeholders such as habit/{id} reach the template as $wp_app_route['params']['id'] (a global set before the template is included); there is no $this in templates.",
             '- Prefer post types, post meta, taxonomies and user meta over custom tables.',
             '- Escape all output, verify nonces and capabilities on every write, use $wpdb->prepare for SQL.',
             '- Enqueue assets from the template with wp_app_enqueue_style() / wp_app_enqueue_script() (same arguments as the wp_ versions, plugin_dir_url() for the src) so they stay scoped to this app.',
@@ -893,6 +899,17 @@
         }
     }
 
+    // Content for the history entry of an OpenAI-style assistant turn.
+    // Reasoning that arrived inside think tags goes back inside the same tags,
+    // so the replayed turn matches what the model generated and the server's
+    // prompt cache keeps matching too.
+    function replayContent(text, reasoning) {
+        if (reasoning.tag && reasoning.text) {
+            return reasoning.tag[0] + reasoning.text + reasoning.tag[1] + text;
+        }
+        return text || null;
+    }
+
     // Marks the conversation so far as cacheable: the history is the bulk of
     // every request and is identical up to the newest message.
     function withCacheBreakpoint(history) {
@@ -1038,6 +1055,11 @@
         let text = '';
         let textLine = null;
         let thinking = null;
+        // The model's reasoning, kept so it can go back into the history:
+        // without it the model sees bare tool calls and re-plans the whole
+        // app on every turn. `field` records how it arrived (a reasoning
+        // field, or inline think tags) so it is replayed the same way.
+        const reasoning = { text: '', field: null, tag: null };
         const splitter = createThinkSplitter();
         const toolCalls = [];
         let finishReason = null;
@@ -1061,6 +1083,10 @@
             if (!chunk) {
                 return;
             }
+            reasoning.text += chunk;
+            if (!reasoning.field && !reasoning.tag) {
+                reasoning.tag = splitter.open;
+            }
             if (!thinking || thinking.done) {
                 thinking = startThinkingLine();
             }
@@ -1069,7 +1095,10 @@
 
         await readSSE(response, (event) => {
             if (event.usage) {
-                addInputUsage({ input_tokens: event.usage.prompt_tokens });
+                // llama.cpp-based servers (LM Studio, Ollama) and OpenAI report
+                // prompt-cache hits under prompt_tokens_details.
+                const cached = event.usage.prompt_tokens_details?.cached_tokens || 0;
+                addInputUsage({ input_tokens: event.usage.prompt_tokens - cached, cache_read_input_tokens: cached });
                 addOutputUsage({ output_tokens: event.usage.completion_tokens });
             }
             const choice = event.choices?.[0];
@@ -1080,7 +1109,10 @@
             const delta = choice.delta || {};
             // Ollama, LM Studio, DeepSeek and OpenAI-style reasoning fields;
             // models without one may put <think> tags into the content.
-            onThinking(delta.reasoning_content || delta.reasoning || '');
+            if (delta.reasoning_content || delta.reasoning) {
+                reasoning.field = reasoning.field || (delta.reasoning_content ? 'reasoning_content' : 'reasoning');
+                onThinking(delta.reasoning_content || delta.reasoning);
+            }
             if (delta.content) {
                 splitThink(splitter, delta.content, onText, onThinking);
             }
@@ -1134,7 +1166,8 @@
             toolCalls: calls,
             assistantMessage: {
                 role: 'assistant',
-                content: text || null,
+                content: replayContent(text, reasoning),
+                ...(reasoning.field && reasoning.text ? { [reasoning.field]: reasoning.text } : {}),
                 tool_calls: calls.length ? calls.map((call) => ({
                     id: call.id,
                     type: 'function',
