@@ -216,7 +216,7 @@ The polyfill intentionally implements only the runtime pieces this scaffold need
 
 Generated apps include lifecycle extension points. Do not register post types, taxonomies, rewrite rules, dashboard widgets, REST routes, or other WordPress-hooked features directly inside `__construct()`; attach WordPress hooks there and run registration from the proper hook.
 
-Declare the post types and taxonomies the app registers in the `post_types` / `taxonomies` WpApp options. `require_login` only gates the front end; declaring the types gates their REST reads with the app's capability and injects `show_in_rest` and the gated controller, so `register_post_type()` needs no REST arguments. Use `launcher` / `app_icon` for My Apps and OpenStation integration.
+Declare the post types and taxonomies the app registers in the `post_types` / `taxonomies` WpApp options. `require_login` only gates the front end; for types registered with `show_in_rest => true` (set that yourself; declaring never turns it on), declaring them gates their REST reads with the app's capability and injects the gated controller, so `register_post_type()` needs no `rest_controller_class`. Use `launcher` / `app_icon` for My Apps and OpenStation integration.
 
 Prefer custom post types, post meta, taxonomies, terms, term meta, and user meta before custom tables. Use custom tables and `BaseStorage` only when native WordPress storage does not fit; `get_schema()` is keyed by unprefixed table name and holds column definitions only.
 

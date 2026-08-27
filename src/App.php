@@ -16,8 +16,9 @@ class App extends BaseApp {
 
             // App content: post types / taxonomies the app registers. Declaring
             // them gates their REST reads with the app's capability (the front-end
-            // require_login does NOT cover /wp-json/) and injects show_in_rest and
-            // the gated controller, so register_post_type() needs no REST args.
+            // require_login does NOT cover /wp-json/) for types registered with
+            // show_in_rest => true, so register_post_type() needs no
+            // rest_controller_class. Declaring never turns show_in_rest on.
             // A map sets a capability per type: [ '{{identifier}}_item' => 'edit_posts' ].
             // 'post_types'         => [ '{{identifier}}_item' ],
             // 'taxonomies'         => [ '{{identifier}}_category' ],
@@ -124,14 +125,15 @@ class App extends BaseApp {
         /*
          * Register custom post types here. This method runs on WordPress init.
          * List each type in the 'post_types' option above: the app then gates
-         * its REST reads and adds show_in_rest for the block editor, so no
-         * REST arguments are needed here.
+         * its REST reads, so no rest_controller_class is needed here. Keep
+         * show_in_rest => true yourself (the block editor needs it).
          *
          * register_post_type( '{{identifier}}_item', [
-         *     'label'    => '{{plugin-name}} Items',
-         *     'public'   => false,
-         *     'show_ui'  => true,
-         *     'supports' => [ 'title', 'editor', 'author' ],
+         *     'label'        => '{{plugin-name}} Items',
+         *     'public'       => false,
+         *     'show_ui'      => true,
+         *     'show_in_rest' => true,
+         *     'supports'     => [ 'title', 'editor', 'author' ],
          * ] );
          */
     }
@@ -146,6 +148,7 @@ class App extends BaseApp {
          *     'label'        => '{{plugin-name}} Categories',
          *     'hierarchical' => true,
          *     'show_ui'      => true,
+         *     'show_in_rest' => true,
          * ] );
          */
     }
