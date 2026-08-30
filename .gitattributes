@@ -1,0 +1,8 @@
+# Keep scaffolding-only files out of GitHub/Packagist zipballs.
+/.agents          export-ignore
+/.codex           export-ignore
+/.github          export-ignore
+/.gitattributes   export-ignore
+/examples         export-ignore
+/skills           export-ignore
+/wizard           export-ignore
