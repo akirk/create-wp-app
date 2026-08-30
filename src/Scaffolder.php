@@ -288,8 +288,13 @@ class Scaffolder {
     }
 
     private function cleanup_setup_files( string $target_dir, bool $is_full_setup ): void {
-        foreach ( [ '.create-wp-app', 'examples', 'scripts', 'skills' ] as $directory ) {
+        foreach ( [ '.agents', '.codex', '.create-wp-app', '.github', 'examples', 'scripts', 'skills', 'wizard' ] as $directory ) {
             $this->remove_directory( $this->path( $target_dir, $directory ) );
+        }
+
+        $gitattributes = $this->path( $target_dir, '.gitattributes' );
+        if ( file_exists( $gitattributes ) ) {
+            unlink( $gitattributes );
         }
 
         if ( $is_full_setup ) {
