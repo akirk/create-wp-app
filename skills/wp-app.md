@@ -15,6 +15,16 @@ Use these rules when creating or modifying a WpApp plugin scaffold.
 - Define WpApp routes in `setup_routes()` and WpApp menu/masterbar entries in `setup_menu()`.
 - Run activation-only work, including custom table creation and rewrite flushing, from the plugin activation hook.
 
+## Assets
+
+- Enqueue app CSS and JS with `wp_app_enqueue_style()`, `wp_app_enqueue_script()` and `wp_app_add_inline_script()`, not the core `wp_enqueue_*` functions. Core enqueueing has no notion of which app is rendering, so the assets load on every app on the site.
+- **Always pass the scope argument** (`$this->get_url_path()`), even though it is optional. Omitted, it resolves to whichever app is rendering at that moment, which is wrong in two different ways: at plugin load nothing is rendering, so the assets land on the global hook and load everywhere; during another app's render they land on that app's hook. Neither looks wrong at the call site.
+- Never hook `wp_app_head` or `wp_app_before_render` to enqueue. Both fire for **every** app installed on the site, not just yours. With the scope passed explicitly you do not need a render-time hook at all.
+- Enqueue from `init`, not from `__construct()`. The constructor runs before translations are available, and `__()` before `init` triggers a `_load_textdomain_just_in_time` notice. Enqueueing from a template also works and is naturally scoped to that app.
+- `wp_localize_script()` does nothing with these: `wp_app_enqueue_script()` prints its own tag rather than registering the handle with `WP_Scripts`, so core has no handle to attach data to and the call fails silently. Use `wp_app_add_inline_script()` with its own handle, registered **before** the script that reads it.
+- `wp_app_enqueue_script()` ignores its `$deps` argument; order the registrations instead.
+- `wp app doctor` reports assets that leak between apps, and duplicate element ids, for every app on the site.
+
 ## Storage Choices
 
 - Prefer WordPress-native storage before custom tables:

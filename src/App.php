@@ -39,6 +39,7 @@ class App extends BaseApp {
         ] );
 
         // Uncomment only when these extension points contain real code.
+        // add_action( 'init', [ $this, 'enqueue_assets' ] );
         // add_action( 'init', [ $this, 'register_post_types' ] );
         // add_action( 'init', [ $this, 'register_taxonomies' ] );
         // add_action( 'wp_dashboard_setup', [ $this, 'register_dashboard_widgets' ] );
@@ -46,6 +47,45 @@ class App extends BaseApp {
         // add_action( 'wp_abilities_api_init', [ $this, 'register_abilities' ] );
         // add_filter( 'ai_assistant_ability_domains', [ $this, 'register_ai_assistant_ability_domains' ] );
         // add_filter( 'ai_assistant_ability_instructions', [ $this, 'get_ai_assistant_ability_instructions' ], 10, 4 );
+    }
+
+    /**
+     * Register this app's CSS and JS.
+     *
+     * Pass the app path as the scope. Without it the scope is guessed from
+     * whatever is rendering, which is '' this early and would load the assets
+     * on every app on the site. With it, this does not need to run during a
+     * render at all, hence init - late enough for translated strings.
+     */
+    public function enqueue_assets(): void {
+        // $scope = $this->get_url_path();
+        //
+        // wp_app_enqueue_style(
+        //     '{{slug}}',
+        //     plugins_url( 'assets/app.css', dirname( __DIR__ ) . '/{{slug}}.php' ),
+        //     [],
+        //     false,
+        //     $scope
+        // );
+        //
+        // Data for a script goes in its own inline handle, registered before
+        // the script. wp_localize_script() does not work with these: they
+        // print their own tags instead of registering with WP_Scripts.
+        // wp_app_add_inline_script(
+        //     '{{slug}}-config',
+        //     'window.{{slug}}Config = ' . wp_json_encode( [] ) . ';',
+        //     true,
+        //     $scope
+        // );
+        //
+        // wp_app_enqueue_script(
+        //     '{{slug}}',
+        //     plugins_url( 'assets/app.js', dirname( __DIR__ ) . '/{{slug}}.php' ),
+        //     [],
+        //     false,
+        //     true,
+        //     $scope
+        // );
     }
 
     protected function get_url_path(): string {
