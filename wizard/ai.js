@@ -692,7 +692,7 @@
             "- Route placeholders such as habit/{id} reach the template as $wp_app_route['params']['id'] (a global set before the template is included); there is no $this in templates.",
             '- Prefer post types, post meta, taxonomies and user meta over custom tables.',
             '- Escape all output, verify nonces and capabilities on every write, use $wpdb->prepare for SQL.',
-            '- Enqueue assets from the template with wp_app_enqueue_style() / wp_app_enqueue_script() (same arguments as the wp_ versions, plugin_dir_url() for the src) so they stay scoped to this app.',
+            '- Enqueue assets with wp_app_enqueue_style() / wp_app_enqueue_script(), passing the app path as the final $scope argument, so they stay scoped to this app.',
             '- Use the --wp-app-color-* CSS variables instead of hard-coded colours.'
         ];
 
