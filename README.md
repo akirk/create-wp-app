@@ -8,6 +8,11 @@ Scaffold a WordPress plugin powered by [WpApp](https://github.com/akirk/wp-app).
 composer create-project akirk/create-wp-app my-plugin
 ```
 
+New Composer projects resolve the latest stable WpApp 2.x release compatible
+with their PHP version. The `^2.0` requirement allows new minor and patch
+releases; it does not pin the initial 2.0 release. Existing apps keep the version
+in their `composer.lock` until you run `composer update akirk/wp-app`.
+
 You can also use the static GitHub Pages generator to download a scaffolded zip
 with WpApp bundled in `vendor/`, or run it in an embedded WordPress Playground:
 
